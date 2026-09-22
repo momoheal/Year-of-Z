@@ -4,3 +4,5 @@ dist
 .DS_Store
 playwright-report
 test-results
+release/
+shots/

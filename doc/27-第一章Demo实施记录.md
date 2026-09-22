@@ -21,6 +21,17 @@
 
 第二章可复用输入、对话及状态持久化；第一章的给水／求助选择保留为事实记录。当前画面是低模原型美术，不代表最终角色与建筑质量。未引入《逃离鸭科夫》的任何原始素材。
 
+## 2026-09-22：仓库完整性补齐（README / LICENSE / 打包 / CI）
+
+- 根目录 `README.md`（中文，主）与 `README.EN.md`（英文，互链）：项目介绍、特性、命令表、操作说明、Pages 部署指引、结构、验收状态如实记录、MIT 声明。
+- `LICENSE`：MIT，署名 momoheal（用户指定）。
+- `scripts/pack.mjs` + `npm run pack`：跨平台零依赖 tar.gz 打包（Node zlib + 最小 POSIX tar 写入器），输出 `release/yoz-v<版本>-<时间戳>.tar.gz`；已实测构建→打包→解包→文件完整。
+- `.github/workflows/ci.yml`：push(main)/PR 时 `npm ci → npm run build（含 tsc）→ npm test`。
+- `.github/workflows/pages.yml`：push(main) 时构建 dist 并部署 GitHub Pages（需仓库 Settings → Pages → Source: GitHub Actions；Vite 相对 base 已兼容子路径）。
+- `.gitignore`：追加 `release/`、`shots/`（verify 截图产物）。
+
+遗留（随已知项沿用）：运行时机验收（`npm run verify`）仍待有浏览器的环境执行。
+
 ## 2026-09-22：反馈轮优化（上轮遗留项）
 
 实现并完成 tsc / vitest(12/12) / vite build 验证（沙箱仍无法跑 Playwright，运行观感以本地 `npm run verify` 为准）：

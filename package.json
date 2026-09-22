@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "test": "vitest run",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "pack": "npm run build && node scripts/pack.mjs"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
