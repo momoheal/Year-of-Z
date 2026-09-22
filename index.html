@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Z年纪事 · 第一章：出墙</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b3230'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%23d9a05b' font-family='serif' font-weight='bold'%3EZ%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="app">
+    <div id="game"></div>
+
+    <!-- HUD -->
+    <div id="hud">
+      <header id="topbar">
+        <div id="brand">
+          <span class="brand-title">Z年纪事</span>
+          <span class="brand-sub">第一章 · 出墙</span>
+        </div>
+        <nav id="toolbar">
+          <button id="btn-inventory" class="tb-btn" title="背包（B）" aria-label="背包"></button>
+          <button id="btn-log" class="tb-btn" title="日志（L）" aria-label="日志"></button>
+          <button id="btn-settings" class="tb-btn" title="设置" aria-label="设置"></button>
+          <button id="btn-mute" class="tb-btn" title="静音" aria-label="静音"></button>
+          <button id="btn-workshop" class="tb-btn tb-workshop" title="工坊（试作）" aria-label="工坊试作"></button>
+        </nav>
+      </header>
+
+      <aside id="taskcard">
+        <div class="task-head">
+          <span class="task-kicker">当前任务</span>
+          <span id="task-progress">0 / 12</span>
+        </div>
+        <div id="task-title">—</div>
+        <div id="task-objective">—</div>
+        <div id="task-done"></div>
+      </aside>
+
+      <div id="interact-hint" class="hidden">
+        <span class="hint-key">E</span><span id="interact-label">交互</span>
+      </div>
+
+      <button id="btn-interact-touch" class="hidden">交互</button>
+
+      <div id="joystick" class="hidden">
+        <div id="joystick-knob"></div>
+      </div>
+
+      <!-- 面板：背包 -->
+      <section id="panel-inventory" class="panel hidden">
+        <div class="panel-head"><h2>背包</h2><button class="panel-close" data-close="panel-inventory">×</button></div>
+        <div id="inventory-list"></div>
+        <p class="panel-note">物品随节点与选择派生，不存在无限背包；托盘与整车货物由装卸队与车辆承运。</p>
+      </section>
+
+      <!-- 面板：日志 -->
+      <section id="panel-log" class="panel hidden">
+        <div class="panel-head"><h2>日志</h2><button class="panel-close" data-close="panel-log">×</button></div>
+        <div class="log-legend">
+          <span class="chip chip-fact">事实</span>
+          <span class="chip chip-uncertain">待核</span>
+          <span class="chip chip-choice">选择</span>
+        </div>
+        <div id="log-list"></div>
+      </section>
+
+      <!-- 面板：设置 -->
+      <section id="panel-settings" class="panel hidden">
+        <div class="panel-head"><h2>设置</h2><button class="panel-close" data-close="panel-settings">×</button></div>
+        <div class="set-row">
+          <label>环境光照（预览，不影响剧情时段）</label>
+          <div class="seg" id="light-seg">
+            <button data-light="auto" class="on">自动</button>
+            <button data-light="dawn">清晨</button>
+            <button data-light="dusk">黄昏</button>
+            <button data-light="night">夜间</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <label for="volume">音量</label>
+          <input id="volume" type="range" min="0" max="100" value="70" />
+        </div>
+        <div class="set-row">
+          <label>重新开始本章</label>
+          <button id="btn-restart" class="danger">重玩</button>
+        </div>
+        <div class="set-help">
+          <h3>操作</h3>
+          <p>桌面：WASD / 方向键移动，Shift 快步，E 与附近目标交互，B 背包，L 日志，Esc 关闭面板。</p>
+          <p>触屏：左下摇杆移动，右下按钮交互，面板均可触摸操作。</p>
+          <p>本作第一章无战斗与生命值；紧张来自封闭空间、响声与不确定的人。</p>
+        </div>
+      </section>
+
+      <!-- 对话 -->
+      <section id="dialog" class="hidden">
+        <div id="dialog-speaker"></div>
+        <div id="dialog-text"></div>
+        <div id="dialog-choices" class="hidden"></div>
+        <div id="dialog-foot">
+          <span id="dialog-page"></span>
+          <span id="dialog-next">继续 ▸</span>
+        </div>
+      </section>
+
+      <!-- 标题画面 -->
+      <div id="title-screen">
+        <div class="title-inner">
+          <div class="title-tag">第一幕 · 试玩切片</div>
+          <h1>Z年纪事</h1>
+          <div class="title-ch">第一章 · 出墙</div>
+          <p class="title-desc">改编自 doc/02《出门之前》、doc/03《首次探索》、doc/05《门里门外》。<br/>一次没有枪的出门：认库位、查标签、把人交接给人。</p>
+          <div class="title-actions">
+            <button id="btn-start" class="primary">开始新的一天</button>
+            <button id="btn-continue" class="hidden">继续上次</button>
+          </div>
+          <p class="title-note">本切片无战斗与击杀内容 · 本地存档 · 音频在首次操作后开启</p>
+        </div>
+      </div>
+
+      <!-- 章节完成 -->
+      <div id="end-screen" class="hidden">
+        <div class="title-inner">
+          <div class="title-tag">第一章 · 完</div>
+          <h2>门里门外</h2>
+          <p class="end-quote">“他问那块红色是什么意思。<br/>新地图上，那片地方是白的。”</p>
+          <p class="title-desc">柳岸里的线索待老郑核实数量——第二章《两公里》尚未制作。</p>
+          <div class="title-actions">
+            <button id="btn-end-log">查看日志</button>
+            <button id="btn-end-roam">再走一走</button>
+            <button id="btn-end-replay" class="danger">重玩本章</button>
+            <button id="btn-end-workshop">工坊试作</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="toast" class="hidden"></div>
+      <div id="fade" class="hidden"><span id="fade-caption"></span></div>
+      <div id="webgl-error" class="hidden">
+        <p>当前浏览器无法创建 WebGL 环境，画面无法显示。</p>
+        <button id="btn-webgl-retry">重试</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
