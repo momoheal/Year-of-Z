@@ -194,38 +194,58 @@ function mergeColoredBoxes(
 
 interface PersonOpt { coat: number; pants?: number; skin?: number; cap?: number; vest?: number; scale?: number }
 
+/** 原创积木人仔比例：方躯干、独立四肢、圆柱头与顶粒，全部由基础几何生成。 */
 function makePerson(o: PersonOpt): THREE.Group {
   const g = new THREE.Group();
   const s = o.scale ?? 1;
   const pants = o.pants ?? 0x4a4d50;
   const skin = o.skin ?? 0xd8b89a;
-  // 腿以髋为轴（鸭子走摆动用）
+
+  // 双腿以髋为轴，脚块略向前，移动时能清楚读出交替步态。
   const mkLeg = (side: number): THREE.Group => {
     const leg = new THREE.Group();
-    leg.position.set(side * 0.09 * s, 0.5 * s, 0);
-    box(leg, 0.16 * s, 0.5 * s, 0.18 * s, pants, 0, -0.25 * s, 0);
+    leg.position.set(side * 0.105 * s, 0.51 * s, 0);
+    box(leg, 0.18 * s, 0.43 * s, 0.2 * s, pants, 0, -0.215 * s, 0);
+    box(leg, 0.19 * s, 0.1 * s, 0.29 * s, pants, 0, -0.42 * s, 0.045 * s);
     g.add(leg);
     return leg;
   };
   const legL = mkLeg(-1);
   const legR = mkLeg(1);
-  const torso = cyl(g, 0.21 * s, 0.62 * s, o.coat, 0, 0.81 * s, 0);
-  torso.scale.x *= 1.05;
-  // 头（含帽）成组，便于点头/前倾
+
+  // 方形躯干与肩臂给远景剪影一个明确的“积木人仔”轮廓。
+  box(g, 0.43 * s, 0.52 * s, 0.3 * s, o.coat, 0, 0.79 * s, 0);
+  const mkArm = (side: number): THREE.Group => {
+    const arm = new THREE.Group();
+    arm.position.set(side * 0.28 * s, 0.98 * s, 0);
+    box(arm, 0.13 * s, 0.39 * s, 0.16 * s, o.coat, 0, -0.195 * s, 0);
+    cyl(arm, 0.065 * s, 0.11 * s, skin, 0, -0.43 * s, 0);
+    g.add(arm);
+    return arm;
+  };
+  const armL = mkArm(-1);
+  const armR = mkArm(1);
+
+  // 圆柱头（含顶粒/帽）成组，保留点头与跑动视线补偿。
   const head = new THREE.Group();
-  head.position.set(0, 1.28 * s, 0);
-  sph(head, 0.155 * s, skin, 0, 0, 0);
+  head.position.set(0, 1.25 * s, 0);
+  cyl(head, 0.155 * s, 0.25 * s, skin);
   if (o.cap) {
-    cyl(head, 0.16 * s, 0.07 * s, o.cap, 0, 0.14 * s, 0);
-    box(head, 0.2 * s, 0.03 * s, 0.14 * s, o.cap, 0, 0.12 * s, 0.14 * s);
+    cyl(head, 0.17 * s, 0.07 * s, o.cap, 0, 0.15 * s, 0);
+    box(head, 0.2 * s, 0.035 * s, 0.16 * s, o.cap, 0, 0.12 * s, 0.14 * s);
+  } else {
+    cyl(head, 0.075 * s, 0.045 * s, skin, 0, 0.145 * s, 0);
   }
   g.add(head);
+
   if (o.vest) {
-    const v = box(g, 0.4 * s, 0.52 * s, 0.32 * s, mat(o.vest), 0, 0.84 * s, 0);
+    const v = box(g, 0.45 * s, 0.43 * s, 0.32 * s, mat(o.vest), 0, 0.8 * s, 0);
     v.castShadow = false;
   }
   g.userData.legL = legL;
   g.userData.legR = legR;
+  g.userData.armL = armL;
+  g.userData.armR = armR;
   g.userData.head = head;
   return g;
 }
@@ -358,7 +378,9 @@ export class GameWorld {
   private guide = new THREE.Group();
   private guideChevs: THREE.Mesh[] = [];
   private glintPool: THREE.Mesh[] = [];
+  // 镜头位置与 lookAt 共用唯一焦点，避免两套目标互相追赶造成启停抽动。
   private camFocus = new V(-12, 0, 37);
+  private readonly camOffset = new V(9, 33, 24);
   private lastMove = { x: 0, z: 0 };
   private bobT = 0;
   private bobAmt = 0;
@@ -541,7 +563,11 @@ export class GameWorld {
     else if (id === 'quarantine') this.quarantinePhysics(this.phys);
     else this.gatePhysics(this.phys);
     this.playerGroup.position.set(spawn.x, 0, spawn.z);
-    this.camFocus.set(spawn.x, 0, spawn.z); // 切场景时镜头直接落位
+    this.lastMove.x = 0;
+    this.lastMove.z = 0;
+    this.camFocus.set(spawn.x, 0, spawn.z); // 切场景时镜头直接落位，不跨场景拖尾
+    this.camera.position.set(spawn.x + this.camOffset.x, this.camOffset.y, spawn.z + this.camOffset.z);
+    this.camera.lookAt(spawn.x, 1, spawn.z);
     this.dog.visible = id === 'park' || id === 'depot';
     if (id === 'depot') {
       // 灰灰已移交工具棚：蹲在园外工具棚边
@@ -1553,22 +1579,21 @@ export class GameWorld {
     this.updateAmbient(dt);
     this.updateLight(dt);
 
-    // 相机：平滑跟随 + 移动方向前瞻 + 站立呼吸
-    this.camFocus.x += (p.position.x - this.camFocus.x) * Math.min(1, dt * 5);
-    this.camFocus.z += (p.position.z - this.camFocus.z) * Math.min(1, dt * 5);
+    // 相机：玩家位置与方向前瞻先合成一个目标，再由唯一焦点做帧率无关阻尼。
+    // 位置和 lookAt 都取同一个 camFocus，消除旧实现中启停时焦点瞬跳、机位滞后的拉扯感。
+    const lead = len > 0.001 ? 1.35 * Math.min(1, len) : 0;
+    const targetX = p.position.x + this.lastMove.x * lead;
+    const targetZ = p.position.z + this.lastMove.z * lead;
+    const camDamping = 1 - Math.exp(-dt * 6);
+    this.camFocus.x += (targetX - this.camFocus.x) * camDamping;
+    this.camFocus.z += (targetZ - this.camFocus.z) * camDamping;
     const breathe = len < 0.001 ? Math.sin(this.clock.t * 1.7) * 0.09 : 0;
-    const lead = len > 0.001 ? Math.min(1.4, len) : 0;
-    const camOff = new V(9, 33, 24);
     this.camera.position.set(
-      this.camFocus.x + camOff.x,
-      camOff.y + breathe,
-      this.camFocus.z + camOff.z
+      this.camFocus.x + this.camOffset.x,
+      this.camOffset.y + breathe,
+      this.camFocus.z + this.camOffset.z
     );
-    this.camera.lookAt(
-      this.camFocus.x + this.lastMove.x * lead,
-      1.0 + breathe * 0.5,
-      this.camFocus.z + this.lastMove.z * lead
-    );
+    this.camera.lookAt(this.camFocus.x, 1.0 + breathe * 0.5, this.camFocus.z);
     this.sun.target.position.copy(this.playerGroup.position);
     this.sun.position.set(
       this.playerGroup.position.x + this.light.cur.sunPos[0],
@@ -1583,6 +1608,8 @@ export class GameWorld {
   private animatePlayer(dt: number, len: number, running: boolean): void {
     const legL = this.playerMesh.userData.legL as THREE.Group | undefined;
     const legR = this.playerMesh.userData.legR as THREE.Group | undefined;
+    const armL = this.playerMesh.userData.armL as THREE.Group | undefined;
+    const armR = this.playerMesh.userData.armR as THREE.Group | undefined;
     const head = this.playerMesh.userData.head as THREE.Group | undefined;
     const speedRatio = (running ? RUN_SPEED : WALK_SPEED) / RUN_SPEED;
     if (len > 0.001) {
@@ -1595,6 +1622,8 @@ export class GameWorld {
     const swing = Math.sin(this.bobT) * 0.62 * this.bobAmt * Math.max(0.55, speedRatio);
     if (legL) legL.rotation.x = swing;
     if (legR) legR.rotation.x = -swing;
+    if (armL) armL.rotation.x = -swing * 0.72;
+    if (armR) armR.rotation.x = swing * 0.72;
     this.playerMesh.position.y = Math.abs(Math.sin(this.bobT)) * 0.05 * this.bobAmt;
     this.playerMesh.rotation.x = running ? 0.07 * this.bobAmt : 0.03 * this.bobAmt;
     if (head) {
