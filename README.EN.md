@@ -10,9 +10,7 @@ the gatekeeper of a logistics park. On the morning of the lockdown you deliver "
 then walk yourself all the way back inside the walls of your own neighborhood.
 No gunshots, no chase — just a crowbar, qualified pallets, a wire-mesh pen and a paper list.
 
-> 🌿 **Branch note**: the playable build lives on
-> [`arena/01a0c311-year-of-z`](../../pull/1) (PR #1, based on `main`).
-> Once merged, `main` ships with an automatic GitHub Pages deployment workflow (see below).
+> 🌿 **Play online**: [momoheal.github.io/Year-of-Z](https://momoheal.github.io/Year-of-Z/) (automatically deployed from `main` by GitHub Pages).
 
 ---
 
@@ -29,7 +27,8 @@ No gunshots, no chase — just a crowbar, qualified pallets, a wire-mesh pen and
 - **Auto-save**: localStorage with throttled writes and corrupt-save recovery — "Continue" after refresh
 - **Workshop**: an isolated overlay with its own renderer and save key — strictly separated from
   chapter state (a narrative red line: the gun never enters Chapter 1's world)
-- **Polish in progress**: duck-walk gait, fake-AO ground patches, dust motes, NPC story staging
+- **Block-figure characters / single-focus smooth camera**: original primitive-built figures have articulated limb motion; camera position and view share one damped focus for stable starts, stops and turns
+- **Polish in progress**: fake-AO ground patches, dust motes, NPC story staging
 
 ## 🎮 Quick Start
 
