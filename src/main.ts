@@ -14,7 +14,7 @@ import {
 } from 'lucide';
 import {
   autoLight, canInteract, canStart, completeNode, createNewState, currentNode,
-  itemsFor, NODES, parseSave, SAVE_KEY, serialize,
+  itemsFor, INTERACT_RANGE, NODES, parseSave, SAVE_KEY, serialize,
   type ChoiceDef, type GameState, type LightMode, type NodeDef, type Page, type SceneId
 } from './story';
 import { GameWorld } from './world';
@@ -339,6 +339,7 @@ function badge(btnId: string, n: number): void {
 function refreshTaskCard(): void {
   const node = currentNode(state);
   $('task-progress').textContent = `${state.completed.length} / ${NODES.length}`;
+  ($('task-progress-fill') as HTMLDivElement).style.width = `${(state.completed.length / NODES.length) * 100}%`;
   if (node) {
     $('task-title').textContent = `${node.id} · ${node.title}`;
     $('task-objective').textContent = node.objective;
@@ -360,6 +361,27 @@ function refreshTaskCard(): void {
 
   const marker = node && node.scene === state.scene ? node.target : null;
   world.setMarker(marker ? marker[0] : null, marker ? marker[1] : 0);
+  if (!marker) $('task-guide').classList.add('hidden');
+}
+
+// ---------------------------------------------------------------- 任务指引罗盘（HUD 内，指向当前目标）
+// 固定等距机位（camOffset x=9,y=33,z=24）下，世界 -Z（“北”）方向投影到屏幕近似朝上偏右，
+// 因此箭头角度直接用目标相对玩家的世界向量换算，指向与地面引路箭头保持一致。
+
+function updateTaskGuide(): void {
+  const guide = $('task-guide');
+  if (!started || paused()) { guide.classList.add('hidden'); return; }
+  const marker = world.getMarker();
+  if (!marker) { guide.classList.add('hidden'); return; }
+  const p = world.playerPos();
+  const dx = marker.x - p.x;
+  const dz = marker.z - p.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist <= INTERACT_RANGE) { guide.classList.add('hidden'); return; }
+  guide.classList.remove('hidden');
+  const bearing = world.screenBearing(dx, dz);
+  ($('task-guide-arrow') as unknown as SVGElement).style.transform = `rotate(${bearing}deg)`;
+  $('task-guide-dist').textContent = `${Math.round(dist)} 米`;
 }
 
 // ---------------------------------------------------------------- 对话
@@ -796,6 +818,7 @@ function frame(now: number): void {
 
   updateHints();
   updateOffscreenArrow();
+  updateTaskGuide();
 
   if (dirty && now - lastSave > 2600) saveNow();
 }
