@@ -17,3 +17,33 @@ jobs:
       - run: npm ci
       - run: npm run build   # 含 tsc --noEmit 类型检查
       - run: npm test        # vitest 叙事内核不变量
+
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+      - name: Start dev server and run verify
+        run: |
+          npm run dev -- --host 0.0.0.0 --port 5173 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:5173/ > /dev/null && break
+            sleep 1
+          done
+          npm run verify
+          STATUS=$?
+          kill "$SERVER_PID" 2>/dev/null || true
+          exit $STATUS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots
+          path: shots/

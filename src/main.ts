@@ -17,23 +17,11 @@ import {
   itemsFor, INTERACT_RANGE, NODES, parseSave, SAVE_KEY, serialize,
   type ChoiceDef, type GameState, type LightMode, type NodeDef, type Page, type SceneId
 } from './story';
+import { SPAWNS, SCENE_CAPTIONS } from './mapdata';
 import { GameWorld } from './world';
 import { Workshop } from './workshop';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-
-const SPAWNS: Record<SceneId, { x: number; z: number }> = {
-  park: { x: -12, z: 37 },
-  depot: { x: -6, z: 7.5 },
-  quarantine: { x: 0.2, z: 2.2 },
-  gate: { x: 0.5, z: 3.6 }
-};
-
-const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
-  depot: '物资站 · 食品厂卸货口 —— 当天傍晚',
-  quarantine: '围墙外 · 外勤观察点 —— 当夜',
-  gate: '小区门口 —— 次日晨'
-};
 
 const ITEM_ICONS: Record<string, typeof Package> = {
   gloves: Hand,
