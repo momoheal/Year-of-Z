@@ -1439,11 +1439,11 @@ export class GameWorld {
   // 纯地面 + 边界墙 + 场景名牌，保证剧情推进/移动/交互可玩；精细人物与道具留待后续任务。
 
   private static readonly PLACEHOLDER_LABEL: Partial<Record<SceneId, string>> = {
-    yard: '小区院内（占位）',
-    road: '沿街卡点 · 下穿道（占位）',
-    pump: '检修便道 · 泵站通道（占位）',
-    liuanli: '柳岸里 · 卸货口（占位）',
-    canteen: '临时食堂（占位）'
+    yard: '小区院内 · 板车出发点',
+    road: '沿街卡点 · 铁路下穿道',
+    pump: '检修便道 · 泵站通道',
+    liuanli: '柳岸里 · 北侧卸货口',
+    canteen: '小区临时食堂'
   };
 
   private static readonly PLACEHOLDER_TINT: Partial<Record<SceneId, [string, string]>> = {
