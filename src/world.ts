@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { Body, Box, Sphere, Vec3, World as PhysWorld } from 'cannon-es';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameState, LightMode, LightPreset, NodeEffects, SceneId } from './story';
-import { PARK_WALLS } from './mapdata';
+import { PARK_WALLS, SCENE_BOUNDS } from './mapdata';
 
 export type WorldEvent = NonNullable<NodeEffects['worldEvent']>;
 
@@ -554,7 +554,8 @@ export class GameWorld {
       if (id === 'park') this.buildPark(g);
       else if (id === 'depot') this.buildDepot(g);
       else if (id === 'quarantine') this.buildQuarantine(g);
-      else this.buildGate(g);
+      else if (id === 'gate') this.buildGate(g);
+      else this.buildPlaceholder(g, id);
     }
     return g;
   }
@@ -570,7 +571,8 @@ export class GameWorld {
     if (id === 'park') this.parkPhysics(this.phys);
     else if (id === 'depot') this.depotPhysics(this.phys);
     else if (id === 'quarantine') this.quarantinePhysics(this.phys);
-    else this.gatePhysics(this.phys);
+    else if (id === 'gate') this.gatePhysics(this.phys);
+    else this.placeholderPhysics(this.phys, id);
     this.playerGroup.position.set(spawn.x, 0, spawn.z);
     this.lastMove.x = 0;
     this.lastMove.z = 0;
@@ -1432,6 +1434,62 @@ export class GameWorld {
     this.addWall(ctx, 7.5, 5, 0.3, 0.3, 1.4);
   }
 
+  // ------------------------------------------------------------ 第二章占位场景
+  // 数据层已接入（story.ts + src/data/chapter2.ts），5 个新场景暂用统一占位建图：
+  // 纯地面 + 边界墙 + 场景名牌，保证剧情推进/移动/交互可玩；精细人物与道具留待后续任务。
+
+  private static readonly PLACEHOLDER_LABEL: Partial<Record<SceneId, string>> = {
+    yard: '小区院内（占位）',
+    road: '沿街卡点 · 下穿道（占位）',
+    pump: '检修便道 · 泵站通道（占位）',
+    liuanli: '柳岸里 · 卸货口（占位）',
+    canteen: '临时食堂（占位）'
+  };
+
+  private static readonly PLACEHOLDER_TINT: Partial<Record<SceneId, [string, string]>> = {
+    yard: ['#5f6a58', '#454e40'],
+    road: ['#6a675c', '#4c493f'],
+    pump: ['#5a6468', '#40484c'],
+    liuanli: ['#63665c', '#484a40'],
+    canteen: ['#6a6050', '#4c4638']
+  };
+
+  private buildPlaceholder(g: THREE.Group, id: SceneId): void {
+    const b = SCENE_BOUNDS[id];
+    const w = b.maxX - b.minX;
+    const d = b.maxZ - b.minZ;
+    const cx = (b.minX + b.maxX) / 2;
+    const cz = (b.minZ + b.maxZ) / 2;
+    const [base, patch] = GameWorld.PLACEHOLDER_TINT[id] ?? ['#5f665a', '#454b40'];
+    const gt = groundTexture(base, patch, 40);
+    gt.repeat.set(Math.max(2, Math.round(w / 6)), Math.max(2, Math.round(d / 6)));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: gt }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(cx, 0, cz);
+    ground.receiveShadow = true;
+    g.add(ground);
+    // 场景名牌（占位标注，后续正式建图时移除）
+    const sign = canvasTexture(360, 64, (c) => {
+      c.fillStyle = '#3a3e36'; c.fillRect(0, 0, 360, 64);
+      c.fillStyle = '#d8d4c4'; c.font = 'bold 22px "Noto Sans CJK SC", sans-serif';
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(GameWorld.PLACEHOLDER_LABEL[id] ?? id, 180, 34);
+    });
+    textBoard(g, 5, 0.9, sign, cx, 2.0, b.minZ + 0.5);
+  }
+
+  private placeholderPhysics(ctx: PhysCtx, id: SceneId): void {
+    const b = SCENE_BOUNDS[id];
+    const hx = (b.maxX - b.minX) / 2;
+    const hz = (b.maxZ - b.minZ) / 2;
+    const cx = (b.minX + b.maxX) / 2;
+    const cz = (b.minZ + b.maxZ) / 2;
+    this.addWall(ctx, cx, b.minZ - 0.5, hx + 1, 0.5, 3);
+    this.addWall(ctx, cx, b.maxZ + 0.5, hx + 1, 0.5, 3);
+    this.addWall(ctx, b.minX - 0.5, cz, 0.5, hz + 1, 3);
+    this.addWall(ctx, b.maxX + 0.5, cz, 0.5, hz + 1, 3);
+  }
+
   // ------------------------------------------------------------ 状态同步与事件
 
   /** 读档后恢复世界外观 */
@@ -1469,6 +1527,13 @@ export class GameWorld {
         this.dogMode = 'shed';
         this.placeDogByState();
         break;
+      case 'cart-ready':
+      case 'van-knock':
+      case 'rain-start':
+      case 'cart-tilt':
+      case 'medic-check':
+      case 'meal-open':
+        break; // 第二章占位场景：暂无对应视觉呈现，留待正式建图接入
     }
   }
 

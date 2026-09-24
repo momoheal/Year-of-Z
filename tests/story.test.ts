@@ -11,6 +11,7 @@ import {
   INTERACT_RANGE,
   NODES,
   parseSave,
+  SAVE_VERSION,
   serialize,
   type GameState
 } from '../src/story';
@@ -165,6 +166,30 @@ describe('存档持久化与恢复', () => {
     expect(restored.state.choices['C01-05']).toBe('give-water');
     expect(hasItem(restored.state, 'personal-water')).toBe(false);
     expect(restored.state.log).toHaveLength(s.log.length);
+  });
+
+  it('v1 存档迁移到 v2：字段补齐，第一章已完成的进度原样保留，可继续进入第二章（YZ-05）', () => {
+    const ch1Ids = NODES.filter((n) => n.id.startsWith('C01-')).map((n) => n.id);
+    const legacyV1 = JSON.stringify({
+      version: 1,
+      completed: ch1Ids,
+      choices: { 'C01-03': 'self' },
+      log: [{ type: 'fact', text: '旧档占位事实', node: ch1Ids[ch1Ids.length - 1] }],
+      flags: ['chapter-done'],
+      itemJournal: [{ node: 'init', add: ['gloves', 'biscuit', 'vest'], remove: [] }],
+      player: { x: -12, z: 37 },
+      scene: 'park',
+      finished: false
+    });
+    const restored = parseSave(legacyV1);
+    // 迁移成功等同于正常读档，不应提示"已恢复为新局"
+    expect(restored.recovered).toBe(false);
+    expect(restored.state.version).toBe(SAVE_VERSION);
+    expect(restored.state.completed).toEqual(ch1Ids);
+    expect(restored.state.choices['C01-03']).toBe('self');
+    expect(restored.state.flags).toContain('chapter-done');
+    // 第二章数据接入后，旧档紧接着第一章末尾，从 C02-00 起可玩
+    expect(currentNode(restored.state)?.id).toBe('C02-00');
   });
 
   it('损坏 / 旧版 / 非法进度存档均恢复为新局而非白屏', () => {

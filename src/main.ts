@@ -10,7 +10,8 @@ import './style.css';
 import {
   createElement,
   Backpack, BookOpenText, Settings, Volume2, VolumeX, Wrench,
-  Hand, Cookie, Shirt, Droplets, Hammer, FileText, Camera, Barcode, Package, MapPin
+  Hand, Cookie, Shirt, Droplets, Hammer, FileText, Camera, Barcode, Package, MapPin,
+  Phone, Wheat, PackageX
 } from 'lucide';
 import {
   autoLight, canInteract, canStart, completeNode, createNewState, currentNode,
@@ -33,7 +34,19 @@ const ITEM_ICONS: Record<string, typeof Package> = {
   'transfer-photo': Camera,
   'batch-photo': Barcode,
   rations: Package,
-  'lead-liuanli': MapPin
+  'lead-liuanli': MapPin,
+  // 第二章
+  'crowbar-2': Hammer,
+  raincoat: Shirt,
+  'handover-liuanli': FileText,
+  'checkpoint-card': Phone,
+  'van-plate-photo': Camera,
+  'rice-8': Wheat,
+  'oil-3': Droplets,
+  'dry-gloves': Hand,
+  'rice-7': Wheat,
+  'rice-damaged': PackageX,
+  'lead-dongjie': MapPin
 };
 
 // ---------------------------------------------------------------- 音频（Web Audio 合成，无外部资源）
