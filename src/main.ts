@@ -11,7 +11,7 @@ import {
   createElement,
   Backpack, BookOpenText, Settings, Volume2, VolumeX, Wrench,
   Hand, Cookie, Shirt, Droplets, Hammer, FileText, Camera, Barcode, Package, MapPin,
-  Phone, Wheat, PackageX
+  Phone, Wheat, PackageX, Utensils, NotebookPen, ClipboardList, ScrollText, ListChecks
 } from 'lucide';
 import {
   autoLight, canInteract, canStart, completeNode, createNewState, currentNode,
@@ -21,6 +21,10 @@ import {
 import { SPAWNS, SCENE_CAPTIONS } from './mapdata';
 import { GameWorld } from './world';
 import { Workshop } from './workshop';
+import {
+  ARENA, canSprint, createCombat, isLocked, stepCombat, TUNING,
+  type CombatEvent, type CombatState
+} from './combat';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -46,7 +50,14 @@ const ITEM_ICONS: Record<string, typeof Package> = {
   'dry-gloves': Hand,
   'rice-7': Wheat,
   'rice-damaged': PackageX,
-  'lead-dongjie': MapPin
+  'lead-dongjie': MapPin,
+  // 第三章
+  'meal-17': Utensils,
+  'roster-note': NotebookPen,
+  'transfer-slip': ClipboardList,
+  'obs-card': ClipboardList,
+  'statement-copy': ScrollText,
+  'list-22': ListChecks
 };
 
 // ---------------------------------------------------------------- 音频（Web Audio 合成，无外部资源）
@@ -159,6 +170,10 @@ class AudioBus {
   chime(): void { this.burst(660, 0.16, 0.07, 'sine'); this.burst(880, 0.22, 0.05, 'sine'); }
   clang(): void { this.noiseBurst(0.22, 2400, 0.16); this.burst(180, 0.2, 0.12, 'square'); }
   rumble(): void { this.noiseBurst(0.5, 120, 0.14); }
+  // 遭遇战：全部为低频撞击与摩擦，不做惨叫或血腥音效
+  thud(): void { this.noiseBurst(0.26, 160, 0.2); this.burst(70, 0.26, 0.14, 'sine'); }
+  scrape(): void { this.noiseBurst(0.34, 900, 0.1); }
+  breath(): void { this.noiseBurst(0.3, 300, 0.07); }
 }
 
 const audio = new AudioBus();
@@ -182,6 +197,12 @@ let session: {
 
 let transitioning = false;
 let endShown = false;
+// 第三章遭遇战
+let combat: CombatState | null = null;
+let combatWinAt = 0;
+let mouseGuard = false;
+let touchGuard = false;
+const edge = { guard: false, strike: false, interact: false };
 let dirty = false;
 let lastSave = 0;
 let stepTimer = 0;
@@ -224,6 +245,11 @@ function paused(): boolean {
     !!(workshop && !$('workshop')?.classList.contains('hidden'));
 }
 
+/** 遭遇战进行中（未分胜负）：允许移动，但屏蔽普通交互与面板 */
+function inCombat(): boolean {
+  return !!combat && combat.outcome === 'none';
+}
+
 function anyPanelOpen(): boolean {
   return ['panel-inventory', 'panel-log', 'panel-settings'].some((id) => !$(id).classList.contains('hidden'));
 }
@@ -251,6 +277,7 @@ function refreshMuteIcon(): void {
 // ---------------------------------------------------------------- 面板
 
 function togglePanel(id: string): void {
+  if (inCombat()) return; // 打起来的时候不给开背包
   const el = $(id);
   const willOpen = el.classList.contains('hidden');
   for (const pid of ['panel-inventory', 'panel-log', 'panel-settings']) $(pid).classList.add('hidden');
@@ -360,7 +387,7 @@ function refreshTaskCard(): void {
   }
   done.classList.toggle('has', state.completed.length > 0);
 
-  const marker = node && node.scene === state.scene ? node.target : null;
+  const marker = node && node.scene === state.scene && !node.encounter && !combat ? node.target : null;
   world.setMarker(marker ? marker[0] : null, marker ? marker[1] : 0);
   if (!marker) $('task-guide').classList.add('hidden');
 }
@@ -499,9 +526,18 @@ function finalizeDialog(): void {
   badge('btn-log', 1);
   badge('btn-inventory', 1);
   saveNow();
+  if (node.encounter) {
+    // 遭遇战节点结算完毕：收起战斗 HUD 与镜头，来人不再出现在后续场景
+    combat = null;
+    world.renderCombat(null, 0);
+    world.setEncounter(false);
+    syncCombatHud();
+  }
   if (r.toScene) {
     sceneTransition(r.toScene);
   }
+  // 下一节点若是自动段落或遭遇战，不需要玩家再跑一趟
+  if (!r.finishedNow) setTimeout(() => maybeAutoNode(), r.toScene ? 1500 : 700);
   if (r.finishedNow) {
     setTimeout(() => {
       $('end-screen').classList.remove('hidden');
@@ -529,6 +565,7 @@ function sceneTransition(to: SceneId): void {
     setTimeout(() => {
       fade.classList.add('hidden');
       transitioning = false;
+      maybeAutoNode();
     }, 620);
   }, 620);
 }
@@ -563,6 +600,26 @@ function armNewGame(): void {
   startGame(true);
 }
 
+/**
+ * 试玩入口：把一、二章按默认选择补全，直接从第三章开始（`?jump=fight` 则直接进厨房开打）。
+ * 只用于试玩与回归，不改变正式流程：补全的进度与正常通关写入的是同一套存档结构。
+ */
+function jumpToChapter3(toFight: boolean): void {
+  localStorage.removeItem(SAVE_KEY);
+  state = createNewState();
+  const stopAt = toFight ? 'C03-03' : 'C03-00';
+  for (const n of NODES) {
+    if (n.id === stopAt) break;
+    const r = completeNode(state, n.id, n.choices?.find((c) => !c.rejected)?.id);
+    if (!r.ok) break;
+    if (r.toScene) state.scene = r.toScene;
+  }
+  const spawn = SPAWNS[state.scene];
+  state.player = { x: spawn.x, z: spawn.z };
+  startGame(true);
+  toast(toFight ? '试玩：直接进入东街厨房的那一刻。' : '试玩：第三章开始，一、二章已按默认选择补全。', 4200);
+}
+
 function startGame(fresh: boolean): void {
   $('title-screen').classList.add('hidden');
   audio.unlock();
@@ -577,6 +634,7 @@ function startGame(fresh: boolean): void {
   started = true;
   saveNow();
   toast(currentNode(state) ? `当前任务：${currentNode(state)!.title}` : '章节已完成', 3200);
+  setTimeout(() => maybeAutoNode(), 900);
 }
 
 function SPD(s: GameState): { x: number; z: number } {
@@ -689,6 +747,14 @@ function initInput(): void {
       return;
     }
     if (paused()) return;
+    if (inCombat()) {
+      // 遭遇战：空格=挡（可长按，挣脱时连按），J/K=挥，E=拿手边的东西
+      if (e.repeat) return;
+      if (e.code === 'Space') { e.preventDefault(); edge.guard = true; }
+      if (e.code === 'KeyJ' || e.code === 'KeyK') edge.strike = true;
+      if (e.code === 'KeyE' || e.code === 'KeyF') edge.interact = true;
+      return;
+    }
     if (e.code === 'KeyE' || e.code === 'KeyF') tryInteract();
     if (e.code === 'KeyB') togglePanel('panel-inventory');
     if (e.code === 'KeyL') togglePanel('panel-log');
@@ -703,8 +769,17 @@ function initInput(): void {
     if (g) mouseAim = { x: g.x, z: g.z, t: performance.now() };
   }, { passive: true });
 
+  window.addEventListener('contextmenu', (e) => { if (inCombat()) e.preventDefault(); });
+  window.addEventListener('pointerup', (e) => { if (e.button === 2) mouseGuard = false; });
+  window.addEventListener('blur', () => { mouseGuard = false; touchGuard = false; });
+
   document.getElementById('game')!.addEventListener('pointerdown', (e) => {
     audio.unlock();
+    if (inCombat()) {
+      if (e.button === 2) { mouseGuard = true; edge.guard = true; }
+      else edge.strike = true;
+      return;
+    }
     if (e.pointerType !== 'mouse' || paused()) return;
     const marker = world.getMarker();
     if (!marker) return;
@@ -751,6 +826,22 @@ function initInput(): void {
     tryInteract();
   });
 
+  // 遭遇战触屏按钮：挡（按住）/ 挥 / 拿
+  const guardBtn = $('btn-guard');
+  guardBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    audio.unlock();
+    touchGuard = true;
+    edge.guard = true;
+  });
+  const guardUp = () => { touchGuard = false; };
+  guardBtn.addEventListener('pointerup', guardUp);
+  guardBtn.addEventListener('pointercancel', guardUp);
+  guardBtn.addEventListener('pointerleave', guardUp);
+  $('btn-strike').addEventListener('pointerdown', (e) => { e.preventDefault(); edge.strike = true; });
+  $('btn-grab').addEventListener('pointerdown', (e) => { e.preventDefault(); edge.interact = true; });
+  $('btn-combat-retry').addEventListener('click', () => { audio.ui(); retryEncounter(); });
+
   $('dialog').addEventListener('click', (e) => {
     if ((e.target as HTMLElement).closest('.choice-btn')) return;
     advanceDialog();
@@ -758,9 +849,10 @@ function initInput(): void {
 }
 
 function tryInteract(): void {
-  if (paused() || !started) return;
+  if (paused() || !started || inCombat()) return;
   const node = currentNode(state);
   if (!node) return;
+  if (node.encounter) return; // 遭遇战节点不靠 E 推进
   if (node.scene !== state.scene) return;
   const p = world.playerPos();
   const dist = Math.hypot(p.x - node.target[0], p.z - node.target[1]);
@@ -774,6 +866,166 @@ function tryInteract(): void {
     return;
   }
   openDialog(node);
+}
+
+// ---------------------------------------------------------------- 第三章 · 厨房遭遇战
+
+/**
+ * 当前节点若是"自动段落"或"遭遇战"，不再要求玩家走到目标按 E：
+ *  - encounter：进入场景即开打（doc/08 的门被拉开那一刻）
+ *  - auto：战斗结束后的善后叙述
+ * 读档、场景切换、上一节点结算后都会调用一次。
+ */
+function maybeAutoNode(): void {
+  if (!started || transitioning || session || combat) return;
+  const node = currentNode(state);
+  if (!node || node.scene !== state.scene) return;
+  if (node.encounter) {
+    startEncounter();
+    return;
+  }
+  if (node.auto) openDialog(node);
+}
+
+function startEncounter(): void {
+  if (combat) return;
+  combat = createCombat();
+  combatWinAt = 0;
+  world.setEncounter(true);
+  for (const pid of ['panel-inventory', 'panel-log', 'panel-settings']) $(pid).classList.add('hidden');
+  $('combat-fail').classList.add('hidden');
+  syncCombatHud();
+  audio.rumble();
+  audio.clang();
+  toast('门被拉开了。退开——别让他贴上来。', 3400);
+}
+
+function retryEncounter(): void {
+  $('combat-fail').classList.add('hidden');
+  const retries = combat ? combat.retries + 1 : 0;
+  combat = createCombat(retries);
+  combatWinAt = 0;
+  // 回到进门时的站位，重新来过（不写任何剧情事实）
+  const spawn = SPAWNS.kitchen;
+  world.setPlayerPos(spawn.x, spawn.z);
+  world.setEncounter(true);
+  syncCombatHud();
+  audio.rumble();
+}
+
+/** 每帧：把输入喂给战斗内核，再把结果喂给画面与 HUD */
+function stepEncounter(dt: number, move: { x: number; z: number }, running: boolean):
+  { move: { x: number; z: number }; running: boolean } {
+  if (!combat) return { move, running };
+  const guardHeld = keys.has('Space') || mouseGuard || touchGuard;
+  const locked = isLocked(combat);
+  const sprinting = running && !locked && Math.hypot(move.x, move.z) > 0.01 && canSprint(combat);
+  const events = stepCombat(combat, {
+    dt,
+    player: world.playerPos(),
+    sprinting,
+    guardHeld,
+    guardPressed: edge.guard,
+    strikePressed: edge.strike,
+    interactPressed: edge.interact
+  });
+  edge.guard = edge.strike = edge.interact = false;
+  handleCombatEvents(events);
+  world.renderCombat(combat, dt);
+  syncCombatHud();
+  updateCombatGuide();
+  if (locked) return { move: { x: 0, z: 0 }, running: false };
+  // 举着东西挡的时候走不快；体力见底也跑不动
+  const scale = guardHeld ? 0.55 : 1;
+  return { move: { x: move.x * scale, z: move.z * scale }, running: sprinting };
+}
+
+function handleCombatEvents(events: CombatEvent[]): void {
+  if (!combat) return;
+  for (const e of events) {
+    switch (e.type) {
+      case 'burst-done': audio.thud(); break;
+      case 'lunge': audio.breath(); break;
+      case 'take-chair': audio.scrape(); toast('抓起椅子。挡一下，一边往备餐台退。', 2600); break;
+      case 'take-knife': audio.scrape(); toast('刀在手里了。他扑上来时先挡，挡住了再挥。', 3000); break;
+      case 'block': audio.clang(); break;
+      case 'shove': audio.thud(); break;
+      case 'chair-break': audio.rumble(); toast('椅子散了——备餐台上有把刀。', 2800); break;
+      case 'grab': audio.thud(); audio.rumble(); break;
+      case 'escape': audio.thud(); break;
+      case 'clinch': audio.clang(); break;
+      case 'win': {
+        audio.thud();
+        combatWinAt = performance.now();
+        world.setMarker(null);
+        $('interact-hint').classList.add('hidden');
+        break;
+      }
+      case 'fail': {
+        audio.rumble();
+        $('combat-fail').classList.remove('hidden');
+        break;
+      }
+    }
+  }
+  // 结束后停一拍，再进善后叙述（不给胜利提示音，也不结算"战绩"）
+  if (combat.outcome === 'win' && combatWinAt > 0 && performance.now() - combatWinAt > 1900 && !session) {
+    const node = currentNode(state);
+    if (node && node.encounter) openDialog(node);
+    combatWinAt = 0;
+  }
+}
+
+/** 战斗中手边能拿的东西（顺序由 combat.ts 决定：椅子 → 椅子散架 → 刀） */
+function combatPickup(c: CombatState): { x: number; z: number; label: string } | null {
+  if (!c.chairTaken) return { x: ARENA.chairX, z: ARENA.chairZ, label: '拿起椅子' };
+  if (!c.knifeTaken && !c.hasChair) return { x: ARENA.knifeX, z: ARENA.knifeZ, label: '抓起备餐台上的刀' };
+  return null;
+}
+
+/** 慌起来很容易忘了东西在哪：地面引路箭头与 E 提示指向下一件能拿的东西 */
+function updateCombatGuide(): void {
+  const hint = $('interact-hint');
+  const tbtn = $('btn-interact-touch');
+  tbtn.classList.add('hidden'); // 触屏用战斗按钮组里的「拿」
+  const pick = combat && combat.outcome === 'none' ? combatPickup(combat) : null;
+  if (!pick) {
+    world.setMarker(null);
+    hint.classList.add('hidden');
+    return;
+  }
+  world.setMarker(pick.x, pick.z);
+  const p = world.playerPos();
+  const near = Math.hypot(p.x - pick.x, p.z - pick.z) <= TUNING.pickupRange;
+  $('interact-label').textContent = pick.label;
+  hint.classList.toggle('hidden', !near || isTouch);
+}
+
+function syncCombatHud(): void {
+  const hud = $('combat-hud');
+  const touch = $('combat-touch');
+  if (!combat || combat.outcome === 'fail') {
+    hud.classList.add('hidden');
+    touch.classList.add('hidden');
+    return;
+  }
+  hud.classList.remove('hidden');
+  touch.classList.toggle('hidden', !isTouch);
+  $('combat-prompt').textContent = combat.prompt;
+  const pct = Math.round((combat.stamina / TUNING.staminaMax) * 100);
+  const fill = $('combat-fill') as HTMLDivElement;
+  fill.style.width = `${pct}%`;
+  fill.classList.toggle('low', pct < 30);
+  $('combat-stam').textContent = `体力 ${pct}%`;
+  $('combat-gear').textContent = combat.hasKnife ? '备餐台的刀（不是我的）'
+    : combat.hasChair ? `椅子 · 还能挡 ${combat.chairHp} 下`
+      : combat.chairTaken ? '空手' : '空手（旁边有椅子）';
+  const mash = $('combat-mash');
+  const grabbed = combat.enemy.state === 'grab';
+  mash.classList.toggle('hidden', !grabbed);
+  if (grabbed) {
+    mash.textContent = `连按 空格 / 点「挣」 挣开　${combat.grabPresses} / ${TUNING.grabPresses}`;
+  }
 }
 
 // ---------------------------------------------------------------- 帧循环
@@ -796,7 +1048,17 @@ function frame(now: number): void {
     mz += joy.z;
   }
   const moving = Math.hypot(mx, mz) > 0.01;
-  const running = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  let running = keys.has('ShiftLeft') || keys.has('ShiftRight');
+
+  // 遭遇战：内核先跑一步，再由它决定这一帧玩家还能不能动、能不能跑
+  if (combat) {
+    const r = stepEncounter(dt, { x: mx, z: mz }, running);
+    mx = r.move.x;
+    mz = r.move.z;
+    running = r.running;
+  } else {
+    edge.guard = edge.strike = edge.interact = false;
+  }
 
   let faceTo: number | null = null;
   if (mouseAim && performance.now() - mouseAim.t < 2200 && started && !pz) {
@@ -808,7 +1070,7 @@ function frame(now: number): void {
 
   world.step(dt, { x: mx, z: mz }, running, faceTo);
 
-  if (moving && started) {
+  if (moving && started && !isLockedNow()) {
     stepTimer -= dt * (running ? 1.6 : 1);
     if (stepTimer <= 0) {
       audio.step(running);
@@ -817,11 +1079,20 @@ function frame(now: number): void {
     dirty = true; // 位置变化，走节流写盘
   }
 
-  updateHints();
-  updateOffscreenArrow();
-  updateTaskGuide();
+  if (!combat) {
+    updateHints();
+    updateOffscreenArrow();
+    updateTaskGuide();
+  } else {
+    $('task-guide').classList.add('hidden');
+    if (arrowEl) arrowEl.style.display = 'none';
+  }
 
   if (dirty && now - lastSave > 2600) saveNow();
+}
+
+function isLockedNow(): boolean {
+  return !!combat && isLocked(combat);
 }
 
 function updateHints(): void {
@@ -901,6 +1172,10 @@ function bindUI(): void {
   });
   $('btn-start').addEventListener('click', () => armNewGame());
   $('btn-continue').addEventListener('click', () => { audio.unlock(); startGame(false); });
+  $('btn-jump-ch3').addEventListener('click', () => {
+    audio.unlock();
+    jumpToChapter3(new URLSearchParams(location.search).get('jump') === 'fight');
+  });
   $('btn-webgl-retry').addEventListener('click', () => location.reload());
   $('taskcard').addEventListener('click', () => {
     if (window.innerWidth <= 720) $('taskcard').classList.toggle('compact');
@@ -913,6 +1188,8 @@ function bindUI(): void {
 
 function boot(): void {
   bootTitle();
+  // ?jump=c3 / ?jump=fight：试玩直达（见 jumpToChapter3）
+  const jump = new URLSearchParams(location.search).get('jump');
   initToolbar();
   initSettings();
   initEndScreen();
@@ -931,6 +1208,7 @@ function boot(): void {
   // 首次操作解锁音频（浏览器自动播放限制）
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
   window.addEventListener('keydown', () => audio.unlock(), { once: true });
+  if (jump === 'c3' || jump === 'fight') jumpToChapter3(jump === 'fight');
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }
 

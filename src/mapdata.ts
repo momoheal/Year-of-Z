@@ -20,7 +20,11 @@ export const SPAWNS: Record<SceneId, { x: number; z: number }> = {
   road: { x: 0, z: 3 },
   pump: { x: 0, z: 0 },
   liuanli: { x: 0, z: 2 },
-  canteen: { x: 0, z: -2 }
+  canteen: { x: 0, z: -2 },
+  // 第三章
+  dongjie: { x: 0, z: 6 },       // 铁网门外的街口
+  kitchen: { x: 0.5, z: 4.0 },   // 临时厨房（活动室）门内
+  obsroom: { x: -0.5, z: 3.2 }   // 外勤观察处走廊侧
 };
 
 export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
@@ -31,7 +35,10 @@ export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
   road: '沿街卡点 · 下穿道 —— 上午',
   pump: '检修便道 · 泵站通道',
   liuanli: '柳岸里 · 北侧卸货口 —— 上午',
-  canteen: '小区临时食堂 —— 傍晚'
+  canteen: '小区临时食堂 —— 傍晚',
+  dongjie: '旧城东街 · 职工宿舍门口 —— 上午',
+  kitchen: '东街临时厨房 · 原职工活动室',
+  obsroom: '外勤观察处 —— 当夜至次日'
 };
 
 /** 场景可活动外框（测试校验目标点在界内） */
@@ -45,7 +52,11 @@ export const SCENE_BOUNDS: Record<SceneId, { minX: number; maxX: number; minZ: n
   road: { minX: -4, maxX: 16, minZ: -8, maxZ: 6 },
   pump: { minX: -8, maxX: 12, minZ: -4, maxZ: 12 },
   liuanli: { minX: -6, maxX: 8, minZ: -2, maxZ: 16 },
-  canteen: { minX: -8, maxX: 8, minZ: -8, maxZ: 8 }
+  canteen: { minX: -8, maxX: 8, minZ: -8, maxZ: 8 },
+  // 第三章：厨房是遭遇战场地，外框与 combat.ts 的 ARENA 对齐（留 0.4 米墙厚余量）
+  dongjie: { minX: -10, maxX: 10, minZ: -6, maxZ: 10 },
+  kitchen: { minX: -7, maxX: 7, minZ: -5.2, maxZ: 5.2 },
+  obsroom: { minX: -6, maxX: 6, minZ: -4, maxZ: 5 }
 };
 
 // ---------------------------------------------------------------- 园区静态阻挡（与 world.ts parkPhysics 同步被消费）
@@ -271,4 +282,22 @@ export const HOTSPOTS: HotspotDef[] = [
       { text: '发放表贴得整整齐齐。"已送达"三个字，今天比昨天顺眼了一点——但也只是一点。' }
     ]
   }
+];
+
+
+// ---------------------------------------------------------------- 第三章：临时厨房（遭遇战场地）
+// 单一来源：world.ts 建图与物理、combat.ts 的遮挡判定共用同一批矩形，
+// 避免"画面上绕桌、逻辑上穿桌"。矩形语义同 WallRect（中心 + 半宽/半深）。
+
+export const KITCHEN_WALLS: WallRect[] = [
+  // 四面墙（南墙留门洞：玩家从这里进来）
+  { x: 0, z: -5.4, hx: 7.2, hz: 0.4, h: 3 },
+  { x: -7.4, z: 0, hx: 0.4, hz: 5.4, h: 3 },
+  { x: 7.4, z: 0, hx: 0.4, hz: 5.4, h: 3 },
+  { x: -4.2, z: 5.4, hx: 3.2, hz: 0.4, h: 3 },
+  { x: 4.6, z: 5.4, hx: 2.8, hz: 0.4, h: 3 },
+  // 家具（与 combat.ts BLOCKERS 一致）
+  { x: 0, z: -3.0, hx: 3.4, hz: 0.55, h: 0.9 },    // 长桌 · 十七只碗
+  { x: 5.5, z: 0.9, hx: 0.6, hz: 2.1, h: 0.95 },   // 备餐台（砧板与刀）
+  { x: -5.9, z: -0.6, hx: 0.55, hz: 1.8, h: 0.9 }  // 窗下电饭锅台
 ];

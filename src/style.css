@@ -318,6 +318,54 @@ button.danger.confirm { background: var(--danger); color: #fff; }
 #ws-stats { font-size: 11px; color: var(--ink-dim); width: 100%; line-height: 1.6; min-height: 18px; }
 .ws-hint { position: absolute; z-index: 2; top: calc(64px + var(--safe-top)); left: 16px; font-size: 11px; color: var(--ink-dim); text-shadow: 0 1px 4px #000; }
 
+
+/* ---------- 第三章 · 厨房遭遇战 ---------- */
+#combat-hud {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(26px + var(--safe-bottom)); width: min(460px, calc(100vw - 32px));
+  background: rgba(13,16,15,.82); border: 1px solid rgba(201,115,99,.45); border-radius: 14px;
+  padding: 10px 14px 11px; z-index: 26; backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+#combat-top { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+#combat-tag {
+  font-size: 10px; letter-spacing: 3px; color: var(--danger);
+  border: 1px solid var(--danger); border-radius: 999px; padding: 2px 9px; flex: none;
+}
+#combat-prompt { font-size: 13px; line-height: 1.5; color: var(--ink); }
+#combat-bar { height: 6px; border-radius: 999px; background: rgba(232,228,218,.12); overflow: hidden; }
+#combat-fill { height: 100%; width: 100%; background: var(--green); transition: width .12s linear; }
+#combat-fill.low { background: var(--danger); }
+#combat-meta { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10.5px; color: var(--ink-dim); letter-spacing: 1px; }
+#combat-mash {
+  margin-top: 8px; text-align: center; font-size: 13px; font-weight: 700; color: var(--danger);
+  letter-spacing: 2px; animation: mash-pulse .38s ease-in-out infinite alternate;
+}
+@keyframes mash-pulse { from { opacity: .55; } to { opacity: 1; } }
+
+#combat-touch {
+  position: absolute; right: calc(16px + var(--safe-bottom)); bottom: calc(118px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: 10px; z-index: 26;
+}
+#combat-touch button {
+  width: 66px; height: 66px; border-radius: 50%; font-size: 16px; font-weight: 700;
+  background: rgba(13,16,15,.72); border: 1px solid var(--edge); color: var(--ink);
+}
+#combat-touch button:active { background: rgba(217,160,91,.28); border-color: var(--accent); }
+#btn-strike { border-color: rgba(201,115,99,.6); color: var(--danger); }
+
+#combat-fail {
+  position: absolute; inset: 0; z-index: 38; background: rgba(12,10,10,.93);
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+#combat-fail h2 { font-size: 26px; font-family: "Songti SC", "STSong", "SimSun", serif; letter-spacing: 6px; margin-bottom: 16px; }
+
+@media (max-width: 720px) {
+  #combat-hud { bottom: calc(16px + var(--safe-bottom)); padding: 8px 12px 9px; }
+  #combat-prompt { font-size: 12px; }
+  #combat-touch button { width: 58px; height: 58px; font-size: 15px; }
+}
+
 /* ---------- 小屏适配 ---------- */
 @media (max-width: 720px) {
   #taskcard {
