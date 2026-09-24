@@ -29,7 +29,7 @@ try {
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-  await page.goto(BASE, { waitUntil: 'networkidle2' });
+  await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1800);
   ok(await page.locator('#game canvas').count() === 1, 'Three.js 画布存在');
   ok(await page.locator('#title-screen:visible').count() === 1, '标题画面可见');
@@ -44,7 +44,7 @@ try {
   // 开始新局
   await page.click('#btn-start');
   await page.waitForTimeout(900);
-  ok((await page.textContent('#task-title'))!.includes('C01-00'), '初始任务为 C01-00');
+  ok((await page.textContent('#task-title'))?.includes('C01-00'), '初始任务为 C01-00');
   await page.screenshot({ path: `${SHOT_DIR}/01-start.png` });
 
   // 走进卡车（出生点距目标约 3 米），出现交互提示
@@ -64,7 +64,7 @@ try {
     await page.waitForTimeout(160);
   }
   await page.waitForTimeout(500);
-  ok((await page.textContent('#task-title'))!.includes('C01-01'), '完成 C01-00 后任务推进到 C01-01');
+  ok((await page.textContent('#task-title'))?.includes('C01-01'), '完成 C01-00 后任务推进到 C01-01');
   await page.screenshot({ path: `${SHOT_DIR}/02-node-done.png` });
 
   // 背包出现撬棍
@@ -80,12 +80,12 @@ try {
   const raw = await page.evaluate(() => localStorage.getItem('yoz.chapter1.v1'));
   const save = raw ? JSON.parse(raw) : null;
   ok(!!save && Array.isArray(save.completed) && save.completed.includes('C01-00'), '存档包含已完成节点');
-  await page.reload({ waitUntil: 'networkidle2' });
+  await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
   ok(await page.locator('#btn-continue:visible').count() === 1, '刷新后出现“继续上次”');
   await page.click('#btn-continue');
   await page.waitForTimeout(800);
-  ok((await page.textContent('#task-title'))!.includes('C01-01'), '读档后任务仍是 C01-01');
+  ok((await page.textContent('#task-title'))?.includes('C01-01'), '读档后任务仍是 C01-01');
 
   // 乱序保护：远距离开南库侧门应提示
   await page.screenshot({ path: `${SHOT_DIR}/04-resumed.png` });
@@ -97,7 +97,7 @@ try {
     hasTouch: true
   });
   mp.on('pageerror', (e) => errors.push(String(e)));
-  await mp.goto(BASE, { waitUntil: 'networkidle2' });
+  await mp.goto(BASE, { waitUntil: 'networkidle' });
   await mp.waitForTimeout(1500);
   ok(await mp.locator('#taskcard:visible').count() === 1, '移动端任务卡可见');
   ok(await mp.locator('#btn-continue:visible').count() === 1, '移动端可继续存档');
