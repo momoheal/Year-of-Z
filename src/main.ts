@@ -595,7 +595,7 @@ function initEndScreen(): void {
   });
   $('btn-end-roam').addEventListener('click', () => {
     $('end-screen').classList.add('hidden');
-    toast('章节已完成。日志与背包仍可查看；第二章尚未制作。');
+    toast('本章已完成。日志与背包仍可查看；下一章内容待解锁。');
   });
   $('btn-end-replay').addEventListener('click', (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
