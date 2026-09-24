@@ -10,30 +10,19 @@ import './style.css';
 import {
   createElement,
   Backpack, BookOpenText, Settings, Volume2, VolumeX, Wrench,
-  Hand, Cookie, Shirt, Droplets, Hammer, FileText, Camera, Barcode, Package, MapPin
+  Hand, Cookie, Shirt, Droplets, Hammer, FileText, Camera, Barcode, Package, MapPin,
+  Phone, Wheat, PackageX
 } from 'lucide';
 import {
   autoLight, canInteract, canStart, completeNode, createNewState, currentNode,
-  itemsFor, NODES, parseSave, SAVE_KEY, serialize,
+  itemsFor, INTERACT_RANGE, NODES, parseSave, SAVE_KEY, serialize,
   type ChoiceDef, type GameState, type LightMode, type NodeDef, type Page, type SceneId
 } from './story';
+import { SPAWNS, SCENE_CAPTIONS } from './mapdata';
 import { GameWorld } from './world';
 import { Workshop } from './workshop';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-
-const SPAWNS: Record<SceneId, { x: number; z: number }> = {
-  park: { x: -12, z: 37 },
-  depot: { x: -6, z: 7.5 },
-  quarantine: { x: 0.2, z: 2.2 },
-  gate: { x: 0.5, z: 3.6 }
-};
-
-const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
-  depot: '物资站 · 食品厂卸货口 —— 当天傍晚',
-  quarantine: '围墙外 · 外勤观察点 —— 当夜',
-  gate: '小区门口 —— 次日晨'
-};
 
 const ITEM_ICONS: Record<string, typeof Package> = {
   gloves: Hand,
@@ -45,7 +34,19 @@ const ITEM_ICONS: Record<string, typeof Package> = {
   'transfer-photo': Camera,
   'batch-photo': Barcode,
   rations: Package,
-  'lead-liuanli': MapPin
+  'lead-liuanli': MapPin,
+  // 第二章
+  'crowbar-2': Hammer,
+  raincoat: Shirt,
+  'handover-liuanli': FileText,
+  'checkpoint-card': Phone,
+  'van-plate-photo': Camera,
+  'rice-8': Wheat,
+  'oil-3': Droplets,
+  'dry-gloves': Hand,
+  'rice-7': Wheat,
+  'rice-damaged': PackageX,
+  'lead-dongjie': MapPin
 };
 
 // ---------------------------------------------------------------- 音频（Web Audio 合成，无外部资源）
@@ -339,6 +340,7 @@ function badge(btnId: string, n: number): void {
 function refreshTaskCard(): void {
   const node = currentNode(state);
   $('task-progress').textContent = `${state.completed.length} / ${NODES.length}`;
+  ($('task-progress-fill') as HTMLDivElement).style.width = `${(state.completed.length / NODES.length) * 100}%`;
   if (node) {
     $('task-title').textContent = `${node.id} · ${node.title}`;
     $('task-objective').textContent = node.objective;
@@ -360,6 +362,27 @@ function refreshTaskCard(): void {
 
   const marker = node && node.scene === state.scene ? node.target : null;
   world.setMarker(marker ? marker[0] : null, marker ? marker[1] : 0);
+  if (!marker) $('task-guide').classList.add('hidden');
+}
+
+// ---------------------------------------------------------------- 任务指引罗盘（HUD 内，指向当前目标）
+// 固定等距机位（camOffset x=9,y=33,z=24）下，世界 -Z（“北”）方向投影到屏幕近似朝上偏右，
+// 因此箭头角度直接用目标相对玩家的世界向量换算，指向与地面引路箭头保持一致。
+
+function updateTaskGuide(): void {
+  const guide = $('task-guide');
+  if (!started || paused()) { guide.classList.add('hidden'); return; }
+  const marker = world.getMarker();
+  if (!marker) { guide.classList.add('hidden'); return; }
+  const p = world.playerPos();
+  const dx = marker.x - p.x;
+  const dz = marker.z - p.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist <= INTERACT_RANGE) { guide.classList.add('hidden'); return; }
+  guide.classList.remove('hidden');
+  const bearing = world.screenBearing(dx, dz);
+  ($('task-guide-arrow') as unknown as SVGElement).style.transform = `rotate(${bearing}deg)`;
+  $('task-guide-dist').textContent = `${Math.round(dist)} 米`;
 }
 
 // ---------------------------------------------------------------- 对话
@@ -796,6 +819,7 @@ function frame(now: number): void {
 
   updateHints();
   updateOffscreenArrow();
+  updateTaskGuide();
 
   if (dirty && now - lastSave > 2600) saveNow();
 }

@@ -14,13 +14,24 @@ export const SPAWNS: Record<SceneId, { x: number; z: number }> = {
   park: { x: -12, z: 37 },
   depot: { x: -6, z: 7.5 },
   quarantine: { x: 0.2, z: 2.2 },
-  gate: { x: 0.5, z: 3.6 }
+  gate: { x: 0.5, z: 3.6 },
+  // 第二章占位场景（本次接入范围：数据 + 通用占位建图，无精细人物/道具）
+  yard: { x: -1, z: 9 },
+  road: { x: 0, z: 3 },
+  pump: { x: 0, z: 0 },
+  liuanli: { x: 0, z: 2 },
+  canteen: { x: 0, z: -2 }
 };
 
 export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
   depot: '物资站 · 食品厂卸货口 —— 当天傍晚',
   quarantine: '围墙外 · 外勤观察点 —— 当夜',
-  gate: '小区门口 —— 次日晨'
+  gate: '小区门口 —— 次日晨',
+  yard: '小区院内 —— 第二次出发',
+  road: '沿街卡点 · 下穿道 —— 上午',
+  pump: '检修便道 · 泵站通道',
+  liuanli: '柳岸里 · 北侧卸货口 —— 上午',
+  canteen: '小区临时食堂 —— 傍晚'
 };
 
 /** 场景可活动外框（测试校验目标点在界内） */
@@ -28,7 +39,13 @@ export const SCENE_BOUNDS: Record<SceneId, { minX: number; maxX: number; minZ: n
   park: { minX: -29.5, maxX: 45.5, minZ: -33.5, maxZ: 42.5 },
   depot: { minX: -30, maxX: 30, minZ: -22, maxZ: 22 },
   quarantine: { minX: -4.2, maxX: 4.2, minZ: -3.0, maxZ: 3.0 },
-  gate: { minX: -30, maxX: 30, minZ: -21, maxZ: 21 }
+  gate: { minX: -30, maxX: 30, minZ: -21, maxZ: 21 },
+  // 第二章占位场景：外框按各自节点 target 覆盖范围留出边距，供 world.ts 占位建图与测试使用
+  yard: { minX: -8, maxX: 8, minZ: -2, maxZ: 14 },
+  road: { minX: -4, maxX: 16, minZ: -8, maxZ: 6 },
+  pump: { minX: -8, maxX: 12, minZ: -4, maxZ: 12 },
+  liuanli: { minX: -6, maxX: 8, minZ: -2, maxZ: 16 },
+  canteen: { minX: -8, maxX: 8, minZ: -8, maxZ: 8 }
 };
 
 // ---------------------------------------------------------------- 园区静态阻挡（与 world.ts parkPhysics 同步被消费）

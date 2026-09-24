@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { Body, Box, Sphere, Vec3, World as PhysWorld } from 'cannon-es';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameState, LightMode, LightPreset, NodeEffects, SceneId } from './story';
-import { PARK_WALLS } from './mapdata';
+import { PARK_WALLS, SCENE_BOUNDS } from './mapdata';
 
 export type WorldEvent = NonNullable<NodeEffects['worldEvent']>;
 
@@ -433,6 +433,8 @@ export class GameWorld {
         new THREE.PlaneGeometry(1.0, 0.58),
         new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.8, depthWrite: false })
       );
+      // 先绕世界 Y 转向再贴地：Euler 顺序须为 YXZ，否则 rotation.y 会把箭头转出地面
+      m.rotation.order = 'YXZ';
       m.rotation.x = -Math.PI / 2;
       m.position.y = 0.045;
       m.visible = false;
@@ -440,11 +442,11 @@ export class GameWorld {
       this.guideChevs.push(m);
     }
     this.scene.add(this.guide);
-    // 环境热点微光池
+    // 互动目标环绕微光池：暖色小八面体，随互动目标缓慢盘旋，视觉上区别于普通场景物件
     for (let i = 0; i < 12; i++) {
       const g = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.09),
-        mat(0xcfd9d0, { emissive: 0xcfd9d0, emissiveIntensity: 0.35 })
+        new THREE.OctahedronGeometry(0.075),
+        new THREE.MeshBasicMaterial({ color: C.amber, transparent: true, opacity: 0.85 })
       );
       g.visible = false;
       this.scene.add(g);
@@ -498,6 +500,13 @@ export class GameWorld {
     );
     pillar.position.y = 3.6;
     this.marker.add(pillar);
+
+    // 互动目标聚光：让当前可交互的人物/道具比周边场景微亮一档，肉眼可辨认但不刺眼
+    const markerLight = new THREE.PointLight(C.amber, 1.7, 6.5, 2);
+    markerLight.position.y = 1.5;
+    this.marker.add(markerLight);
+    this.marker.userData.light = markerLight;
+
     this.scene.add(this.marker);
     this.marker.visible = false;
   }
@@ -545,7 +554,8 @@ export class GameWorld {
       if (id === 'park') this.buildPark(g);
       else if (id === 'depot') this.buildDepot(g);
       else if (id === 'quarantine') this.buildQuarantine(g);
-      else this.buildGate(g);
+      else if (id === 'gate') this.buildGate(g);
+      else this.buildPlaceholder(g, id);
     }
     return g;
   }
@@ -561,7 +571,8 @@ export class GameWorld {
     if (id === 'park') this.parkPhysics(this.phys);
     else if (id === 'depot') this.depotPhysics(this.phys);
     else if (id === 'quarantine') this.quarantinePhysics(this.phys);
-    else this.gatePhysics(this.phys);
+    else if (id === 'gate') this.gatePhysics(this.phys);
+    else this.placeholderPhysics(this.phys, id);
     this.playerGroup.position.set(spawn.x, 0, spawn.z);
     this.lastMove.x = 0;
     this.lastMove.z = 0;
@@ -1423,6 +1434,62 @@ export class GameWorld {
     this.addWall(ctx, 7.5, 5, 0.3, 0.3, 1.4);
   }
 
+  // ------------------------------------------------------------ 第二章占位场景
+  // 数据层已接入（story.ts + src/data/chapter2.ts），5 个新场景暂用统一占位建图：
+  // 纯地面 + 边界墙 + 场景名牌，保证剧情推进/移动/交互可玩；精细人物与道具留待后续任务。
+
+  private static readonly PLACEHOLDER_LABEL: Partial<Record<SceneId, string>> = {
+    yard: '小区院内（占位）',
+    road: '沿街卡点 · 下穿道（占位）',
+    pump: '检修便道 · 泵站通道（占位）',
+    liuanli: '柳岸里 · 卸货口（占位）',
+    canteen: '临时食堂（占位）'
+  };
+
+  private static readonly PLACEHOLDER_TINT: Partial<Record<SceneId, [string, string]>> = {
+    yard: ['#5f6a58', '#454e40'],
+    road: ['#6a675c', '#4c493f'],
+    pump: ['#5a6468', '#40484c'],
+    liuanli: ['#63665c', '#484a40'],
+    canteen: ['#6a6050', '#4c4638']
+  };
+
+  private buildPlaceholder(g: THREE.Group, id: SceneId): void {
+    const b = SCENE_BOUNDS[id];
+    const w = b.maxX - b.minX;
+    const d = b.maxZ - b.minZ;
+    const cx = (b.minX + b.maxX) / 2;
+    const cz = (b.minZ + b.maxZ) / 2;
+    const [base, patch] = GameWorld.PLACEHOLDER_TINT[id] ?? ['#5f665a', '#454b40'];
+    const gt = groundTexture(base, patch, 40);
+    gt.repeat.set(Math.max(2, Math.round(w / 6)), Math.max(2, Math.round(d / 6)));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: gt }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(cx, 0, cz);
+    ground.receiveShadow = true;
+    g.add(ground);
+    // 场景名牌（占位标注，后续正式建图时移除）
+    const sign = canvasTexture(360, 64, (c) => {
+      c.fillStyle = '#3a3e36'; c.fillRect(0, 0, 360, 64);
+      c.fillStyle = '#d8d4c4'; c.font = 'bold 22px "Noto Sans CJK SC", sans-serif';
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(GameWorld.PLACEHOLDER_LABEL[id] ?? id, 180, 34);
+    });
+    textBoard(g, 5, 0.9, sign, cx, 2.0, b.minZ + 0.5);
+  }
+
+  private placeholderPhysics(ctx: PhysCtx, id: SceneId): void {
+    const b = SCENE_BOUNDS[id];
+    const hx = (b.maxX - b.minX) / 2;
+    const hz = (b.maxZ - b.minZ) / 2;
+    const cx = (b.minX + b.maxX) / 2;
+    const cz = (b.minZ + b.maxZ) / 2;
+    this.addWall(ctx, cx, b.minZ - 0.5, hx + 1, 0.5, 3);
+    this.addWall(ctx, cx, b.maxZ + 0.5, hx + 1, 0.5, 3);
+    this.addWall(ctx, b.minX - 0.5, cz, 0.5, hz + 1, 3);
+    this.addWall(ctx, b.maxX + 0.5, cz, 0.5, hz + 1, 3);
+  }
+
   // ------------------------------------------------------------ 状态同步与事件
 
   /** 读档后恢复世界外观 */
@@ -1460,6 +1527,13 @@ export class GameWorld {
         this.dogMode = 'shed';
         this.placeDogByState();
         break;
+      case 'cart-ready':
+      case 'van-knock':
+      case 'rain-start':
+      case 'cart-tilt':
+      case 'medic-check':
+      case 'meal-open':
+        break; // 第二章占位场景：暂无对应视觉呈现，留待正式建图接入
     }
   }
 
@@ -1541,6 +1615,19 @@ export class GameWorld {
     return { nx: v.x, ny: v.y };
   }
 
+  /**
+   * 世界位移 (dx, dz) 在当前固定机位下对应的屏幕方位角（度，0=正上，顺时针）。
+   * 机位朝向恒定（正交相机不随玩家旋转），可直接用相机基向量换算，不受玩家所在位置影响。
+   */
+  screenBearing(dx: number, dz: number): number {
+    const right = new V(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    const up = new V(0, 1, 0).applyQuaternion(this.camera.quaternion);
+    const d = new V(dx, 0, dz);
+    const sx = d.dot(right);
+    const sy = d.dot(up);
+    return Math.atan2(sx, sy) * 180 / Math.PI;
+  }
+
   // ------------------------------------------------------------ 帧更新
 
   step(dt: number, move: { x: number; z: number }, running: boolean, faceTo: number | null): void {
@@ -1577,6 +1664,7 @@ export class GameWorld {
     this.animatePlayer(dt, len, running);
     this.updateDog(dt);
     this.updateAmbient(dt);
+    this.updateGuideTrail();
     this.updateLight(dt);
 
     // 相机：玩家位置与方向前瞻先合成一个目标，再由唯一焦点做帧率无关阻尼。
@@ -1659,6 +1747,33 @@ export class GameWorld {
     }
   }
 
+  /** 地面引路箭头：从玩家脚下指向当前目标，每隔一段距离摆一枚，随距离渐隐 */
+  private updateGuideTrail(): void {
+    if (!this.marker.visible || !this.markerTarget) {
+      for (const m of this.guideChevs) m.visible = false;
+      return;
+    }
+    const px = this.playerGroup.position.x;
+    const pz = this.playerGroup.position.z;
+    const dx = this.markerTarget.x - px;
+    const dz = this.markerTarget.z - pz;
+    const dist = Math.hypot(dx, dz);
+    const gap = 1.8;
+    const startGap = 1.1; // 脚下留白，避免箭头压在角色身上
+    const ang = Math.atan2(dx, dz);
+    const count = Math.min(this.guideChevs.length, Math.max(0, Math.floor((dist - startGap) / gap)));
+    for (let i = 0; i < this.guideChevs.length; i++) {
+      const chev = this.guideChevs[i];
+      if (i >= count) { chev.visible = false; continue; }
+      const d = startGap + i * gap;
+      chev.position.set(px + Math.sin(ang) * d, 0.045, pz + Math.cos(ang) * d);
+      chev.rotation.y = ang;
+      chev.visible = true;
+      const fade = 1 - Math.min(1, i / Math.max(1, count));
+      (chev.material as THREE.MeshBasicMaterial).opacity = 0.16 + fade * 0.5;
+    }
+  }
+
   private updateAmbient(dt: number): void {
     this.clock.t += dt;
     // 标记动画
@@ -1669,6 +1784,20 @@ export class GameWorld {
       const ring = this.marker.userData.ring as THREE.Mesh;
       const s = 1 + Math.sin(this.clock.t * 2.6) * 0.08;
       ring.scale.set(s, s, s);
+      const light = this.marker.userData.light as THREE.PointLight | undefined;
+      if (light) light.intensity = 1.5 + Math.sin(this.clock.t * 2.6) * 0.35;
+      // 环绕微光：让当前互动目标周身有几点缓慢盘旋的暖光，与普通场景物件区分
+      const mx = this.marker.position.x;
+      const mz = this.marker.position.z;
+      for (let i = 0; i < this.glintPool.length; i++) {
+        const g = this.glintPool[i];
+        if (i >= 5) { g.visible = false; continue; }
+        const a = this.clock.t * 1.1 + (i / 5) * Math.PI * 2;
+        g.position.set(mx + Math.cos(a) * 1.1, 0.7 + Math.sin(this.clock.t * 1.8 + i) * 0.35 + i * 0.25, mz + Math.sin(a) * 1.1);
+        g.visible = true;
+      }
+    } else {
+      for (const g of this.glintPool) g.visible = false;
     }
     // 列车
     if (this.train) {
