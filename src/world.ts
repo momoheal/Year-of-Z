@@ -1468,7 +1468,8 @@ export class GameWorld {
     ground.position.set(cx, 0, cz);
     ground.receiveShadow = true;
     g.add(ground);
-    // 场景名牌（占位标注，后续正式建图时移除）
+    // 场景名牌与第二章关键地标：先用低模几何建立可辨认的空间关系，
+    // 后续可在不改变节点坐标的前提下替换为精细资产。
     const sign = canvasTexture(360, 64, (c) => {
       c.fillStyle = '#3a3e36'; c.fillRect(0, 0, 360, 64);
       c.fillStyle = '#d8d4c4'; c.font = 'bold 22px "Noto Sans CJK SC", sans-serif';
@@ -1476,6 +1477,43 @@ export class GameWorld {
       c.fillText(GameWorld.PLACEHOLDER_LABEL[id] ?? id, 180, 34);
     });
     textBoard(g, 5, 0.9, sign, cx, 2.0, b.minZ + 0.5);
+    this.buildChapter2Props(g, id);
+  }
+
+  private buildChapter2Props(g: THREE.Group, id: SceneId): void {
+    if (id === 'yard') {
+      // 出发院：板车、工具架与雨衣箱
+      box(g, 2.8, 0.18, 1.5, C.wood, 0, 0.35, 6);
+      box(g, 2.4, 0.12, 0.12, C.metalDark, 0, 0.55, 5.35);
+      cyl(g, 0.38, 0.16, C.metalDark, -0.95, 0.18, 6, { rx: Math.PI / 2 });
+      cyl(g, 0.38, 0.16, C.metalDark, 0.95, 0.18, 6, { rx: Math.PI / 2 });
+      box(g, 1.2, 1.4, 0.75, C.metalDark, -4.5, 0.7, 6.5);
+      box(g, 0.8, 0.05, 0.9, C.cloth, 2.8, 0.85, 5.5);
+    } else if (id === 'road') {
+      // 下穿道：桥体、积水带与侧停的白色面包车
+      box(g, 18, 3.4, 2.2, C.concreteDark, 6, 2.2, -5.5);
+      box(g, 3.5, 1.35, 1.7, C.sheet, 10, 0.7, -1.8);
+      box(g, 2.4, 0.9, 0.08, C.metalDark, 10, 1.0, -0.92);
+      box(g, 12, 0.025, 1.2, 0x53666a, 6, 0.03, -2.8);
+    } else if (id === 'pump') {
+      // 检修便道：泵站、沙袋和铁路围栏
+      box(g, 3.8, 3.2, 3.2, C.concrete, 7, 1.6, 6);
+      cyl(g, 0.55, 4.5, C.metalDark, 5.2, 2.25, 5.1);
+      for (let i = 0; i < 5; i++) box(g, 1.0, 0.35, 0.45, C.wood, -4 + i * 0.8, 0.18 + i * 0.05, 8);
+      for (let i = 0; i < 6; i++) box(g, 0.08, 1.5, 0.08, C.metalDark, -6 + i * 2.2, 0.75, -1);
+    } else if (id === 'liuanli') {
+      // 柳岸里卸货口：铁网门、蓝色托盘和一袋袋物资
+      box(g, 0.16, 2.6, 12, C.metalDark, -3.8, 1.3, 7);
+      box(g, 3.6, 0.16, 2.0, PALLET, 1.5, 0.25, 5.5);
+      for (let i = 0; i < 4; i++) box(g, 0.72, 0.85, 0.72, C.sheet, 0.4 + (i % 2) * 0.85, 0.75 + Math.floor(i / 2) * 0.8, 5.5);
+      box(g, 1.4, 1.2, 0.08, C.metal, 4, 0.8, 5.2);
+    } else if (id === 'canteen') {
+      // 临时食堂：发餐窗口、长桌与登记桌
+      box(g, 9, 2.8, 1.0, C.wallFade, 0, 1.4, -5.5);
+      box(g, 2.2, 0.9, 0.12, C.metalDark, 0, 1.2, -4.9);
+      box(g, 5.5, 0.18, 1.0, C.wood, 0, 0.9, 1.5);
+      box(g, 1.8, 0.75, 0.9, C.wood, -4, 0.75, 2.4);
+    }
   }
 
   private placeholderPhysics(ctx: PhysCtx, id: SceneId): void {
