@@ -11,7 +11,8 @@ import * as THREE from 'three';
 import { Body, Box, Sphere, Vec3, World as PhysWorld } from 'cannon-es';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameState, LightMode, LightPreset, NodeEffects, SceneId } from './story';
-import { PARK_WALLS, SCENE_BOUNDS } from './mapdata';
+import { KITCHEN_WALLS, PARK_WALLS, SCENE_BOUNDS } from './mapdata';
+import { ARENA, type CombatState } from './combat';
 
 export type WorldEvent = NonNullable<NodeEffects['worldEvent']>;
 
@@ -374,6 +375,18 @@ export class GameWorld {
   private lampLights: THREE.PointLight[] = [];
   private npcLao: THREE.Group | null = null;
   private npcWorker: THREE.Group | null = null;
+  // 第三章：厨房遭遇战相关对象
+  private foe: THREE.Group | null = null;
+  private foeMesh: THREE.Group | null = null;
+  private kitchenDoor: THREE.Object3D | null = null;
+  private kitchenChair: THREE.Object3D | null = null;
+  private kitchenKnife: THREE.Object3D | null = null;
+  private kitchenFeng: THREE.Group | null = null;
+  private kitchenAfter: THREE.Group | null = null;
+  private heldChair: THREE.Object3D | null = null;
+  private heldKnife: THREE.Object3D | null = null;
+  private foeAnim = 0;
+  private zoomScale = 1;
   private dusts: THREE.Points[] = [];
   private guide = new THREE.Group();
   private guideChevs: THREE.Mesh[] = [];
@@ -398,6 +411,22 @@ export class GameWorld {
     this.playerMesh = makePerson({ coat: 0xb9b3a4, pants: 0x6a6f74, vest: 0xd8b93f });
     const pack = box(this.playerMesh, 0.3, 0.4, 0.18, 0x4d5a4a, 0, 0.9, -0.24);
     pack.castShadow = false;
+    // 第三章遭遇战：举在身前的椅子 / 握在手里的刀（平时隐藏，不进入其他章节）
+    const heldChair = this.makeChair();
+    heldChair.scale.setScalar(0.85);
+    heldChair.position.set(0, 0.42, 0.62);
+    heldChair.rotation.set(-0.5, 0, 0);
+    heldChair.visible = false;
+    this.playerMesh.add(heldChair);
+    this.heldChair = heldChair;
+    const heldKnife = new THREE.Group();
+    heldKnife.position.set(0.3, 0.86, 0.3);
+    heldKnife.rotation.set(-0.5, 0.2, 0);
+    box(heldKnife, 0.04, 0.02, 0.26, mat(0xc3cace), 0, 0, 0.1);
+    box(heldKnife, 0.035, 0.03, 0.11, 0x4a3b2c, 0, 0, -0.07);
+    heldKnife.visible = false;
+    this.playerMesh.add(heldKnife);
+    this.heldKnife = heldKnife;
     this.playerGroup.add(this.playerMesh);
     const blob = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 20),
@@ -555,6 +584,7 @@ export class GameWorld {
       else if (id === 'depot') this.buildDepot(g);
       else if (id === 'quarantine') this.buildQuarantine(g);
       else if (id === 'gate') this.buildGate(g);
+      else if (id === 'kitchen') this.buildKitchen(g);
       else this.buildPlaceholder(g, id);
     }
     return g;
@@ -572,6 +602,7 @@ export class GameWorld {
     else if (id === 'depot') this.depotPhysics(this.phys);
     else if (id === 'quarantine') this.quarantinePhysics(this.phys);
     else if (id === 'gate') this.gatePhysics(this.phys);
+    else if (id === 'kitchen') this.kitchenPhysics(this.phys);
     else this.placeholderPhysics(this.phys, id);
     this.playerGroup.position.set(spawn.x, 0, spawn.z);
     this.lastMove.x = 0;
@@ -580,6 +611,7 @@ export class GameWorld {
     this.camera.position.set(spawn.x + this.camOffset.x, this.camOffset.y, spawn.z + this.camOffset.z);
     this.camera.lookAt(spawn.x, 1, spawn.z);
     this.dog.visible = id === 'park' || id === 'depot';
+    if (id !== 'kitchen' && this.foe) this.foe.visible = false;
     if (id === 'depot') {
       // 灰灰已移交工具棚：蹲在园外工具棚边
       this.dog.position.set(-13.2, 0, 6.4);
@@ -1434,6 +1466,261 @@ export class GameWorld {
     this.addWall(ctx, 7.5, 5, 0.3, 0.3, 1.4);
   }
 
+  // ------------------------------------------------------------ 第三章：东街临时厨房（遭遇战场地）
+  // 这是本作第一处需要"打"的房间，因此不用占位建图：桌、碗、备餐台、砧板与值班室门
+  // 都要能一眼读出用途——玩家得知道往哪退、哪里有能挡的东西、刀在什么位置。
+  // 物理与 combat.ts 的遮挡共用 mapdata.KITCHEN_WALLS，保证"画面绕桌 = 逻辑绕桌"。
+
+  private buildKitchen(g: THREE.Group): void {
+    const gt = groundTexture('#6f6a5c', '#565244', 70);
+    gt.repeat.set(5, 4);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(15.2, 11.6), new THREE.MeshLambertMaterial({ map: gt }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    g.add(ground);
+
+    const wallM = this.fadedWall();
+    box(g, 14.8, 3, 0.8, wallM, 0, 1.5, -5.4);      // 北墙（值班室在这一侧）
+    box(g, 0.8, 3, 11.2, wallM, -7.4, 1.5, 0);      // 西墙（窗）
+    box(g, 0.8, 3, 11.2, wallM, 7.4, 1.5, 0);       // 东墙
+    box(g, 6.6, 3, 0.8, wallM, -4.2, 1.5, 5.4);     // 南墙西段
+    box(g, 5.8, 3, 0.8, wallM, 4.6, 1.5, 5.4);      // 南墙东段（中间为门洞）
+    // 天花与吊灯（室内感：压低的顶 + 两盏冷白灯）
+    const ceil = box(g, 15.2, 0.24, 11.6, mat(0x585c55), 0, 3.12, 0);
+    ceil.castShadow = false;
+    ceil.receiveShadow = false;
+    for (const lx of [-3.2, 3.2]) {
+      const lamp = box(g, 1.6, 0.1, 0.3, mat(0xe6e2d2, { emissive: 0xe6e2d2, emissiveIntensity: 0.8 }), lx, 2.94, -0.6);
+      lamp.castShadow = false;
+      this.lampGlow.push(lamp);
+      const pl = new THREE.PointLight(0xf0ead8, 0, 9, 2);
+      pl.position.set(lx, 2.7, -0.6);
+      g.add(pl);
+      this.lampLights.push(pl);
+    }
+    // 西墙窗（外面是院子的灰白）
+    box(g, 0.1, 1.3, 4.4, mat(0xb9c4c0, { emissive: 0xb9c4c0, emissiveIntensity: 0.22 }), -7.0, 1.7, 1.6).castShadow = false;
+
+    // 褪色的歌咏比赛合照
+    const photo = canvasTexture(256, 160, (c) => {
+      c.fillStyle = '#b8b09a'; c.fillRect(0, 0, 256, 160);
+      c.fillStyle = '#9aa08f'; c.fillRect(10, 26, 236, 108);
+      c.fillStyle = '#7d8474';
+      for (let i = 0; i < 14; i++) c.fillRect(20 + i * 16, 62 + (i % 3) * 6, 11, 62);
+      c.fillStyle = '#6b6350'; c.font = '14px "Noto Sans CJK SC", sans-serif';
+      c.fillText('厂 · 歌咏比赛 合影', 58, 20);
+    });
+    textBoard(g, 1.9, 1.2, photo, 1.8, 1.9, -4.96);
+
+    // 长桌与十七只碗
+    const table = new THREE.Group();
+    table.position.set(0, 0, -3.0);
+    g.add(table);
+    box(table, 6.8, 0.12, 1.1, C.wood, 0, 0.82, 0);
+    for (const lx of [-3.2, 3.2]) {
+      box(table, 0.12, 0.8, 0.12, C.metalDark, lx, 0.41, -0.42);
+      box(table, 0.12, 0.8, 0.12, C.metalDark, lx, 0.41, 0.42);
+    }
+    aoPatch(table, 7.4, 1.8, 0, 0, 0.4);
+    for (let i = 0; i < 17; i++) {
+      const bx = -3.0 + (i % 9) * 0.75;
+      const bz = i < 9 ? -0.24 : 0.26;
+      const big = i % 4 === 0;
+      const bowl = cyl(table, big ? 0.13 : 0.11, 0.09, i === 6 ? 0xb9c2c8 : 0xe0dccb, bx, 0.93, bz);
+      bowl.castShadow = false;
+      if (i === 6) cyl(table, 0.135, 0.02, 0xc8a06a, bx, 0.98, bz); // 裂了边、缠着胶带的那只
+    }
+
+    // 备餐台 + 砧板 + 刀 + 半截白萝卜
+    const prep = new THREE.Group();
+    prep.position.set(5.5, 0, 0.9);
+    g.add(prep);
+    box(prep, 1.2, 0.9, 4.2, mat(0x8f958c), 0, 0.45, 0);
+    box(prep, 1.3, 0.08, 4.3, C.metal, 0, 0.94, 0);
+    aoPatch(prep, 2.0, 5.0, 0, 0, 0.42);
+    const boardG = new THREE.Group();
+    boardG.position.set(-0.45, 0, 0);
+    prep.add(boardG);
+    box(boardG, 0.5, 0.05, 0.72, 0xa8845a, 0, 1.0, 0);
+    cyl(boardG, 0.055, 0.28, 0xe8e4d6, 0.02, 1.06, 0.2, { rz: Math.PI / 2 }); // 半截干缩的白萝卜
+    // 刀：刃 + 柄（拿走后隐藏）
+    const knife = new THREE.Group();
+    knife.position.set(0, 1.04, -0.16);
+    knife.rotation.y = 0.5;
+    boardG.add(knife);
+    box(knife, 0.26, 0.015, 0.05, mat(0xc3cace), 0, 0, 0);
+    box(knife, 0.11, 0.025, 0.035, 0x4a3b2c, -0.185, 0, 0);
+    this.kitchenKnife = knife;
+
+    // 窗下电饭锅台（插头都拔了）
+    const cook = new THREE.Group();
+    cook.position.set(-5.9, 0, -0.6);
+    g.add(cook);
+    box(cook, 1.1, 0.85, 3.6, mat(0x8a8f85), 0, 0.42, 0);
+    box(cook, 1.2, 0.07, 3.7, C.metal, 0, 0.89, 0);
+    for (let i = 0; i < 3; i++) {
+      cyl(cook, 0.25, 0.32, 0xd6d2c4, 0, 1.08, -1.1 + i * 1.1);
+      cyl(cook, 0.26, 0.04, 0xa8a496, 0, 1.26, -1.1 + i * 1.1);
+      box(cook, 0.5, 0.02, 0.02, 0x2f3330, 0.5, 0.2, -1.1 + i * 1.1); // 拔下来的线
+    }
+    aoPatch(cook, 1.9, 4.4, 0, 0, 0.4);
+
+    // 那把椅子（第一件能挡的东西）
+    const chair = this.makeChair();
+    chair.position.set(ARENA.chairX, 0, ARENA.chairZ);
+    chair.rotation.y = 0.6;
+    g.add(chair);
+    this.kitchenChair = chair;
+
+    // 值班室门（北墙，玻璃糊着报纸）
+    const doorFrame = new THREE.Group();
+    doorFrame.position.set(-4.6, 0, -5.0);
+    g.add(doorFrame);
+    box(doorFrame, 1.25, 2.4, 0.16, mat(0x6e6a5e), 0, 1.2, -0.1).castShadow = false;
+    const door = new THREE.Group();
+    door.position.set(-0.55, 0, 0);
+    doorFrame.add(door);
+    const panel = box(door, 1.0, 2.2, 0.08, mat(0x8a7f68), 0.5, 1.1, 0);
+    panel.castShadow = false;
+    const paper = box(door, 0.66, 0.66, 0.1, mat(0xcfc7ad), 0.5, 1.72, 0.01);
+    paper.castShadow = false;
+    cyl(door, 0.035, 0.12, C.metalDark, 0.92, 1.05, 0.08, { rx: Math.PI / 2 });
+    this.kitchenDoor = door;
+
+    // 冯师傅（交接与守门的位置；遭遇战开始后倒在门边）
+    const feng = makePerson({ coat: 0x7b6f5c, pants: 0x4a4d50, skin: 0xd2b193 });
+    feng.position.set(-3.3, 0, -3.9);
+    feng.rotation.y = Math.PI - 0.5;
+    g.add(feng);
+    this.kitchenFeng = feng;
+
+    // 事后到场：沈医生与志愿者（after-crisis 事件后出现）
+    const after = new THREE.Group();
+    after.visible = false;
+    g.add(after);
+    const medic = makePerson({ coat: 0xd8dbd6, pants: 0x4d5560, cap: 0xc9cec8 });
+    medic.position.set(-1.6, 0, -2.0);
+    medic.rotation.y = Math.PI + 0.4;
+    after.add(medic);
+    const vol = makePerson({ coat: 0x5f7a6a, pants: 0x3f4550 });
+    vol.position.set(1.4, 0, 2.6);
+    vol.rotation.y = -0.7;
+    after.add(vol);
+    this.kitchenAfter = after;
+
+    this.addDust(g, 60, { x: [-6.5, 6.5], y: [0.4, 2.6], z: [-4.6, 4.6] });
+  }
+
+  /** 折叠椅：座面 + 靠背 + 四条腿（战斗中会被举起来挡） */
+  private makeChair(): THREE.Group {
+    const c = new THREE.Group();
+    box(c, 0.46, 0.06, 0.46, C.wood, 0, 0.46, 0);
+    box(c, 0.46, 0.52, 0.06, C.wood, 0, 0.74, -0.2);
+    for (const [lx, lz] of [[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]] as const) {
+      box(c, 0.05, 0.46, 0.05, C.metalDark, lx, 0.23, lz);
+    }
+    return c;
+  }
+
+  private kitchenPhysics(ctx: PhysCtx): void {
+    for (const w of KITCHEN_WALLS) this.addWall(ctx, w.x, w.z, w.hx, w.hz, w.h ?? 3, w.name);
+  }
+
+  // ------------------------------------------------------------ 遭遇战渲染（数据来自 combat.ts，本类只负责画）
+
+  private ensureFoe(): THREE.Group {
+    if (this.foe) return this.foe;
+    const holder = new THREE.Group();
+    const mesh = makePerson({ coat: 0x6c7566, pants: 0x3c4148, skin: 0xbcae9c });
+    holder.add(mesh);
+    const blob = new THREE.Mesh(
+      new THREE.CircleGeometry(0.42, 18),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 })
+    );
+    blob.rotation.x = -Math.PI / 2;
+    blob.position.y = 0.02;
+    holder.add(blob);
+    holder.visible = false;
+    this.scene.add(holder);
+    this.foe = holder;
+    this.foeMesh = mesh;
+    return holder;
+  }
+
+  /** 进入/退出遭遇战：镜头收近一档，值班室门打开，冯师傅倒在门边 */
+  setEncounter(on: boolean): void {
+    this.zoomScale = on ? 1.32 : 1;
+    this.resize();
+    const foe = this.ensureFoe();
+    foe.visible = on;
+    if (this.kitchenDoor) this.kitchenDoor.rotation.y = on ? -1.3 : 0;
+    // 冯师傅：开打后倒在门边；事后（医护已到场）保持倒地，不要站回去
+    const down = on || !!this.kitchenAfter?.visible;
+    if (this.kitchenFeng) {
+      this.kitchenFeng.rotation.x = down ? -Math.PI / 2 + 0.25 : 0;
+      this.kitchenFeng.position.set(down ? -3.9 : -3.3, down ? 0.34 : 0, down ? -4.1 : -3.9);
+      this.kitchenFeng.rotation.y = down ? Math.PI - 1.1 : Math.PI - 0.5;
+    }
+    if (!on && this.kitchenAfter?.visible && this.kitchenDoor) this.kitchenDoor.rotation.y = -1.3;
+    if (!on && this.heldChair) this.heldChair.visible = false;
+    if (!on && this.heldKnife) this.heldKnife.visible = false;
+  }
+
+  /** 每帧同步战斗状态到画面；传 null 表示没有战斗 */
+  renderCombat(s: CombatState | null, dt: number): void {
+    const foe = this.ensureFoe();
+    if (!s) {
+      foe.visible = false;
+      if (this.heldChair) this.heldChair.visible = false;
+      if (this.heldKnife) this.heldKnife.visible = false;
+      return;
+    }
+    foe.visible = true;
+    foe.position.set(s.enemy.x, 0, s.enemy.z);
+    foe.rotation.y = s.enemy.facing;
+    if (this.kitchenChair) this.kitchenChair.visible = !s.chairTaken;
+    if (this.kitchenKnife) this.kitchenKnife.visible = !s.knifeTaken;
+    if (this.heldChair) this.heldChair.visible = s.hasChair;
+    if (this.heldKnife) this.heldKnife.visible = s.hasKnife;
+
+    const mesh = this.foeMesh!;
+    const st = s.enemy.state;
+    const legL = mesh.userData.legL as THREE.Group;
+    const legR = mesh.userData.legR as THREE.Group;
+    const armL = mesh.userData.armL as THREE.Group;
+    const armR = mesh.userData.armR as THREE.Group;
+    if (st === 'down') {
+      // 靠着台沿滑下去：整个人向侧后倾倒，不做任何特写
+      mesh.rotation.x = Math.max(mesh.rotation.x - dt * 2.4, -Math.PI / 2 + 0.2);
+      mesh.position.y = Math.max(0, mesh.position.y - dt * 0.8);
+      armL.rotation.x = armR.rotation.x = -0.2;
+      legL.rotation.x = legR.rotation.x = 0.1;
+      return;
+    }
+    mesh.rotation.x = 0;
+    mesh.position.y = 0;
+    const moving = st === 'chase' || st === 'lunge';
+    this.foeAnim += dt * (st === 'lunge' ? 16 : moving ? 9 : 2.5);
+    const sw = Math.sin(this.foeAnim) * (moving ? 0.7 : 0.12);
+    legL.rotation.x = sw;
+    legR.rotation.x = -sw;
+    if (st === 'windup' || st === 'lunge' || st === 'grab' || st === 'clinch') {
+      armL.rotation.x = armR.rotation.x = -2.1; // 双臂前伸
+      mesh.rotation.x = st === 'lunge' ? 0.36 : 0.22;
+    } else if (st === 'stagger' || st === 'recover') {
+      armL.rotation.x = armR.rotation.x = 0.5;
+      mesh.rotation.x = -0.24;
+    } else {
+      armL.rotation.x = -sw * 0.6;
+      armR.rotation.x = sw * 0.6;
+    }
+  }
+
+  /** 事后：医生与志愿者到场，来人不再动 */
+  private setKitchenAftermath(on: boolean): void {
+    if (this.kitchenAfter) this.kitchenAfter.visible = on;
+  }
+
   // ------------------------------------------------------------ 第二章占位场景
   // 数据层已接入（story.ts + src/data/chapter2.ts），5 个新场景暂用统一占位建图：
   // 纯地面 + 边界墙 + 场景名牌，保证剧情推进/移动/交互可玩；精细人物与道具留待后续任务。
@@ -1443,7 +1730,9 @@ export class GameWorld {
     road: '沿街卡点 · 铁路下穿道',
     pump: '检修便道 · 泵站通道',
     liuanli: '柳岸里 · 北侧卸货口',
-    canteen: '小区临时食堂'
+    canteen: '小区临时食堂',
+    dongjie: '旧城东街 · 职工宿舍铁网门',
+    obsroom: '外勤观察处 · 原培训中心'
   };
 
   private static readonly PLACEHOLDER_TINT: Partial<Record<SceneId, [string, string]>> = {
@@ -1451,7 +1740,9 @@ export class GameWorld {
     road: ['#6a675c', '#4c493f'],
     pump: ['#5a6468', '#40484c'],
     liuanli: ['#63665c', '#484a40'],
-    canteen: ['#6a6050', '#4c4638']
+    canteen: ['#6a6050', '#4c4638'],
+    dongjie: ['#63605a', '#474540'],
+    obsroom: ['#5c6166', '#42474b']
   };
 
   private buildPlaceholder(g: THREE.Group, id: SceneId): void {
@@ -1478,6 +1769,7 @@ export class GameWorld {
     });
     textBoard(g, 5, 0.9, sign, cx, 2.0, b.minZ + 0.5);
     this.buildChapter2Props(g, id);
+    this.buildChapter3Props(g, id);
   }
 
   private buildChapter2Props(g: THREE.Group, id: SceneId): void {
@@ -1516,6 +1808,59 @@ export class GameWorld {
     }
   }
 
+  private buildChapter3Props(g: THREE.Group, id: SceneId): void {
+    if (id === 'dongjie') {
+      // 两栋旧楼之间的铁网门：砖头压住下面的缺口，塑料条挂在网上
+      for (let i = 0; i < 9; i++) box(g, 0.06, 2.2, 0.06, C.metalDark, -8 + i * 2, 1.1, -2.4);
+      box(g, 16, 0.08, 0.08, C.metalDark, 0, 2.2, -2.4);
+      box(g, 1.4, 2.2, 0.1, mat(0x6f766e), 0.4, 1.1, -2.4);
+      for (let i = 0; i < 6; i++) box(g, 0.5, 0.18, 0.28, 0x9a6a55, -6 + i * 2.3, 0.09, -2.3);
+      for (const bx of [-7.5, 7.5]) {
+        const h = 12 + (bx > 0 ? 3 : 0);
+        box(g, 6.5, h, 7, mat(0x85827a), bx, h / 2, -7.5).castShadow = false;
+      }
+      // 街口的社区小货车与卸下来的餐箱
+      box(g, 3.6, 1.5, 1.8, mat(0x9aa39c), -6.5, 1.0, 6.5);
+      box(g, 1.3, 1.2, 1.7, mat(0x7d8a86), -4.2, 0.85, 6.5);
+      for (let i = 0; i < 3; i++) box(g, 0.7, 0.4, 0.5, C.sheet, -1.2 + i * 0.85, 0.2, -1.2);
+      // 墙边那辆电动车（后架两只塑料筐、车把上一副洗旧的布手套）
+      const ev = new THREE.Group();
+      ev.position.set(4.6, 0, -0.6);
+      ev.rotation.y = -0.5;
+      g.add(ev);
+      box(ev, 1.3, 0.16, 0.36, 0x6f7a80, 0, 0.55, 0);
+      cyl(ev, 0.26, 0.1, 0x2a2d2e, -0.55, 0.26, 0, { rx: Math.PI / 2 });
+      cyl(ev, 0.26, 0.1, 0x2a2d2e, 0.55, 0.26, 0, { rx: Math.PI / 2 });
+      box(ev, 0.5, 0.36, 0.5, 0xb8b1a0, -0.5, 0.82, 0);
+      box(ev, 0.5, 0.36, 0.5, 0x9aa8b0, 0.42, 0.82, 0);
+      box(ev, 0.16, 0.08, 0.3, C.cloth, 0.62, 1.04, 0);
+    } else if (id === 'obsroom') {
+      // 原培训中心：床、收了一半的投影幕、门口的桌子（补充询问在这里做）
+      box(g, 1.0, 0.36, 2.1, mat(0x8c8f8a), -3.6, 0.36, 0.6);
+      box(g, 1.05, 0.16, 2.15, C.sheet, -3.6, 0.6, 0.6);
+      box(g, 0.9, 0.12, 0.4, 0xd8d4c8, -3.6, 0.7, -0.3);
+      box(g, 4.6, 0.06, 0.12, mat(0xe4e0d4), 0.5, 2.2, -3.6).castShadow = false;
+      box(g, 4.6, 1.5, 0.05, mat(0xf0ece0), 0.5, 1.45, -3.6).castShadow = false;
+      box(g, 1.7, 0.1, 0.9, C.wood, 1.6, 0.76, -1.2);
+      for (const [lx, lz] of [[0.85, -0.4], [-0.85, -0.4], [0.85, 0.4], [-0.85, 0.4]] as const) {
+        box(g, 0.07, 0.76, 0.07, C.metalDark, 1.6 + lx, 0.38, -1.2 + lz);
+      }
+      box(g, 0.44, 0.06, 0.44, C.wood, 2.6, 0.46, -1.2);
+      box(g, 0.44, 0.5, 0.06, C.wood, 2.8, 0.72, -1.2);
+      // 走廊灯与教室编号牌
+      const tag = canvasTexture(128, 64, (c) => {
+        c.fillStyle = '#2f3532'; c.fillRect(0, 0, 128, 64);
+        c.fillStyle = '#d8d4c4'; c.font = 'bold 26px "Noto Sans CJK SC", sans-serif';
+        c.textAlign = 'center'; c.fillText('三 · 12', 64, 42);
+      });
+      textBoard(g, 0.9, 0.45, tag, -3.6, 2.2, -3.55);
+      const pl = new THREE.PointLight(0xdfe6ea, 0, 10, 2);
+      pl.position.set(0, 2.6, 1.5);
+      g.add(pl);
+      this.lampLights.push(pl);
+    }
+  }
+
   private placeholderPhysics(ctx: PhysCtx, id: SceneId): void {
     const b = SCENE_BOUNDS[id];
     const hx = (b.maxX - b.minX) / 2;
@@ -1526,6 +1871,17 @@ export class GameWorld {
     this.addWall(ctx, cx, b.maxZ + 0.5, hx + 1, 0.5, 3);
     this.addWall(ctx, b.minX - 0.5, cz, 0.5, hz + 1, 3);
     this.addWall(ctx, b.maxX + 0.5, cz, 0.5, hz + 1, 3);
+    // 第三章两处占位场景的主要静物给上阻挡：铁网、楼体、床与桌子
+    if (id === 'dongjie') {
+      this.addWall(ctx, -4.6, -2.4, 4.6, 0.25, 2.2);  // 铁网（西段）
+      this.addWall(ctx, 4.6, -2.4, 4.6, 0.25, 2.2);   // 铁网（东段，中间留门）
+      this.addWall(ctx, -7.5, -7.5, 3.3, 3.5, 12);
+      this.addWall(ctx, 7.5, -7.5, 3.3, 3.5, 12);
+      this.addWall(ctx, -5.6, 6.5, 2.4, 0.95, 1.5);   // 社区小货车
+    } else if (id === 'obsroom') {
+      this.addWall(ctx, -3.6, 0.6, 0.55, 1.1, 0.8);   // 床
+      this.addWall(ctx, 1.6, -1.2, 0.9, 0.5, 0.8);    // 询问用的桌子
+    }
   }
 
   // ------------------------------------------------------------ 状态同步与事件
@@ -1542,6 +1898,11 @@ export class GameWorld {
     else this.dogMode = 'idle';
     this.placeDogByState(state);
     this.setNpcStage(state.completed.length);
+    // 第三章：事发之后读档，厨房保持事后状态；未开打则一切如常
+    if (state.completed.includes('C03-03')) {
+      this.setKitchenAftermath(true);
+      this.setEncounter(false);
+    }
     this.setLightMode(state.lightMode,
       state.scene === 'gate' ? 'dawn' : state.scene === 'quarantine' ? 'night' : state.scene === 'depot' ? 'dusk'
         : state.completed.length <= 4 ? 'dawn' : 'noon');
@@ -1572,6 +1933,15 @@ export class GameWorld {
       case 'medic-check':
       case 'meal-open':
         break; // 第二章占位场景：暂无对应视觉呈现，留待正式建图接入
+      case 'meal-handout':
+        break; // 门边发餐：由场景静物呈现，无额外状态
+      case 'crisis-door':
+        break; // 门真正被拉开的一瞬由遭遇战开场接管（setEncounter）
+      case 'after-crisis':
+        this.setKitchenAftermath(true);
+        break;
+      case 'obs-morning':
+        break;
     }
   }
 
@@ -1925,7 +2295,7 @@ export class GameWorld {
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h);
     const aspect = w / h;
-    const halfH = aspect >= 1.25 ? 11.5 : 14.5;
+    const halfH = (aspect >= 1.25 ? 11.5 : 14.5) / this.zoomScale;
     this.camera.left = -halfH * aspect;
     this.camera.right = halfH * aspect;
     this.camera.top = halfH;

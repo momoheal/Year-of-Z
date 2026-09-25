@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Z年纪事 · 第一章：出墙</title>
+  <title>Z年纪事 · 第一—三章</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b3230'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%23d9a05b' font-family='serif' font-weight='bold'%3EZ%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -15,7 +15,7 @@
       <header id="topbar">
         <div id="brand">
           <span class="brand-title">Z年纪事</span>
-          <span class="brand-sub">第一章 · 出墙</span>
+          <span class="brand-sub">第一—三章 · 出墙 / 两公里 / 今天不煮了</span>
         </div>
         <nav id="toolbar">
           <button id="btn-inventory" class="tb-btn" title="背包（B）" aria-label="背包"></button>
@@ -29,7 +29,7 @@
       <aside id="taskcard">
         <div class="task-head">
           <span class="task-kicker">当前任务</span>
-          <span id="task-progress">0 / 12</span>
+          <span id="task-progress">0 / 30</span>
         </div>
         <div id="task-progress-bar"><div id="task-progress-fill"></div></div>
         <div id="task-title">—</div>
@@ -46,6 +46,35 @@
       </div>
 
       <button id="btn-interact-touch" class="hidden">交互</button>
+
+      <!-- 第三章 · 厨房遭遇战 HUD -->
+      <div id="combat-hud" class="hidden">
+        <div id="combat-top">
+          <span id="combat-tag">遭遇</span>
+          <span id="combat-prompt">—</span>
+        </div>
+        <div id="combat-bar"><div id="combat-fill"></div></div>
+        <div id="combat-meta"><span id="combat-stam">体力</span><span id="combat-gear">空手</span></div>
+        <div id="combat-mash" class="hidden">连按 空格 挣开</div>
+      </div>
+
+      <div id="combat-touch" class="hidden">
+        <button id="btn-guard">挡</button>
+        <button id="btn-strike">挥</button>
+        <button id="btn-grab">拿</button>
+      </div>
+
+      <div id="combat-fail" class="hidden">
+        <div class="title-inner">
+          <div class="title-tag">被按在地上</div>
+          <h2>沈医生还没有下来</h2>
+          <p class="end-quote">你没有被咬。<br/>但这一次，你没能退开。</p>
+          <p class="title-desc">这一段可以从门被拉开的那一刻重来。<br/>先退、再挡；被贴上以前，把能挡的东西拿到手里。</p>
+          <div class="title-actions">
+            <button id="btn-combat-retry" class="primary">再来一次</button>
+          </div>
+        </div>
+      </div>
 
       <div id="joystick" class="hidden">
         <div id="joystick-knob"></div>
@@ -93,7 +122,8 @@
           <h3>操作</h3>
           <p>桌面：WASD / 方向键移动，Shift 快步，E 与附近目标交互，B 背包，L 日志，Esc 关闭面板。</p>
           <p>触屏：左下摇杆移动，右下按钮交互，面板均可触摸操作。</p>
-          <p>本作第一章无战斗与生命值；紧张来自封闭空间、响声与不确定的人。</p>
+          <p>第一、二章无战斗；第三章厨房有一次遭遇：空格（或右键）挡，J（或左键）挥，E 拿手边的东西。</p>
+          <p>遭遇战没有连杀与追击，被扑倒也不是死亡演出——可以从那一刻重来。</p>
         </div>
       </section>
 
@@ -113,23 +143,24 @@
         <div class="title-inner">
           <div class="title-tag">第一幕 · 试玩切片</div>
           <h1>Z年纪事</h1>
-          <div class="title-ch">第一章 · 出墙</div>
-          <p class="title-desc">改编自 doc/02《出门之前》、doc/03《首次探索》、doc/05《门里门外》。<br/>一次没有枪的出门：认库位、查标签、把人交接给人。</p>
+          <div class="title-ch">第一—三章 · 出墙 · 两公里 · 今天不煮了</div>
+          <p class="title-desc">改编自 doc/02—09。<br/>前两章没有枪，也没有战斗；第三章在东街的临时厨房里，有一次躲不掉的遭遇。</p>
           <div class="title-actions">
             <button id="btn-start" class="primary">开始新的一天</button>
             <button id="btn-continue" class="hidden">继续上次</button>
+            <button id="btn-jump-ch3" title="一、二章按默认选择自动补全，直接从东街那天早上开始">第三章试玩 · 直奔东街</button>
           </div>
-          <p class="title-note">本切片无战斗与击杀内容 · 本地存档 · 音频在首次操作后开启</p>
+          <p class="title-note">无枪械 · 第三章含一次自卫遭遇（无连杀、无追击） · 本地存档 · 音频在首次操作后开启</p>
         </div>
       </div>
 
       <!-- 章节完成 -->
       <div id="end-screen" class="hidden">
         <div class="title-inner">
-          <div class="title-tag">第一章 · 完</div>
-          <h2>门里门外</h2>
-          <p class="end-quote">“他问那块红色是什么意思。<br/>新地图上，那片地方是白的。”</p>
-          <p class="title-desc">柳岸里的线索待老郑核实数量——第二章《两公里》尚未制作。</p>
+          <div class="title-tag">第三章 · 完</div>
+          <h2>写在背面</h2>
+          <p class="end-quote">“那些数字原来排得整整齐齐，<br/>现在每个后面都得多写几句话。”</p>
+          <p class="title-desc">东街临时接三天，之后还在办。第四章《回执》尚未制作。</p>
           <div class="title-actions">
             <button id="btn-end-log">查看日志</button>
             <button id="btn-end-roam">再走一走</button>

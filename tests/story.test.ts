@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canInteract,
+  ITEMS,
   canStart,
   completeNode,
   createNewState,
@@ -203,6 +204,68 @@ describe('存档持久化与恢复', () => {
     expect(bad.state.completed).toHaveLength(0);
     // 空存档视为新局，不算损坏
     expect(parseSave(null).recovered).toBe(false);
+  });
+});
+
+describe('第三章 · 今天不煮了（遭遇战章）', () => {
+  it('铺垫压到最短：厨房遭遇战前只有三个节点，且战斗节点进场即打', () => {
+    const ch3 = NODES.filter((n) => n.id.startsWith('C03-'));
+    expect(ch3).toHaveLength(6);
+    const fight = ch3.findIndex((n) => n.encounter === 'kitchen');
+    expect(fight).toBe(3);              // C03-00/01/02 之后立刻开打
+    expect(ch3[fight].id).toBe('C03-03');
+    expect(ch3[fight].auto).toBe(true); // 打完自动进善后叙述，不用再跑一趟
+    expect(ch3[fight].choices ?? []).toHaveLength(0); // 战斗不做选择题
+    // 战斗前的三个节点都在"出车—门口—值班室门"这条直线上，没有支线跑腿
+    expect(ch3.slice(0, 3).map((n) => n.scene)).toEqual(['yard', 'dongjie', 'kitchen']);
+  });
+
+  it('首次致死：记为一次、留下后果，且刀始终不属于许晨也不进背包', () => {
+    const s = playAll();
+    expect(s.finished).toBe(true);
+    expect(hasFlag(s, 'first-lethal')).toBe(true);
+    expect(hasFlag(s, 'knife-not-mine')).toBe(true);
+    expect(hasFlag(s, 'chapter3-done')).toBe(true);
+    // 背包里从来没有过刀（现场留作调查记录）
+    for (const d of s.itemJournal) {
+      for (const id of [...d.add, ...d.remove]) {
+        expect(ITEMS[id]?.name ?? id).not.toMatch(/刀/);
+      }
+    }
+    expect(itemsFor(s).some((i) => /刀/.test(i.name))).toBe(false);
+    const all = s.log.map((l) => l.text).join('\n');
+    expect(all).toContain('不属于许晨');
+    expect(all).toContain('未归还');
+    // 致死事实只记一次，且不写成战果
+    expect(s.log.filter((l) => l.text.includes('确认死亡'))).toHaveLength(1);
+    expect(all).not.toMatch(/击杀|干掉|反杀|连杀|处决|战果/);
+  });
+
+  it('陈述不能照原样签：未亲见的"咬伤"必须更正，拒绝提交不改变状态', () => {
+    const s = playUntil('C03-04');
+    const bad = completeNode(s, 'C03-04', 'sign-as-is');
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(bad.rejected).toBe(true);
+      expect(bad.pages && bad.pages.length).toBeGreaterThan(0);
+    }
+    expect(s.completed).not.toContain('C03-04');
+    expect(s.flags).not.toContain('statement-signed');
+    const good = completeNode(s, 'C03-04', 'correct-record');
+    expect(good.ok).toBe(true);
+    expect(hasFlag(s, 'statement-signed')).toBe(true);
+    expect(s.log.some((l) => l.type === 'uncertain' && l.text.includes('记不全'))).toBe(true);
+  });
+
+  it('东街口径：十九人是到场、二十二人是核实后需配送，数字不相减', () => {
+    const s = playAll();
+    const ch3 = s.log.filter((l) => l.node.startsWith('C03-')).map((l) => l.text).join('\n');
+    expect(ch3).toContain('本次到场十九人');
+    expect(ch3).toContain('二十二名');
+    expect(ch3).toContain('临时接三天');
+    // 本章不揭示自愈，也不给冯师傅的暴露结果下结论
+    expect(ch3).not.toMatch(/自愈|痊愈|不会感染|已排除感染/);
+    expect(s.log.some((l) => l.node.startsWith('C03-') && l.type === 'uncertain')).toBe(true);
   });
 });
 
