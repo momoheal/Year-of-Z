@@ -107,7 +107,8 @@ TypeScript · Vite 5 · three.js 0.169 · cannon-es · lucide（图标）· vite
 六节点对话流（`?jump=c3`，断言「咬伤 → 袭击」更正与二十二人名单）、厨房遭遇战整场
 （拿椅子 → 椅子散架 → 拿刀 → 挡 → 挥 → 进 C03-04）以及失败重来路径（`?jump=fight`）；
 CI 的 e2e job 改为跑 **生产构建**（`vite preview`）并上传厨房战斗中 / 观察处截图。
-该脚本仍**无法在本地交付环境执行**（沙箱下载不了 Chromium），以 GitHub Actions 的 e2e job 为准。
+该脚本无法在本地交付环境执行（沙箱下载不了 Chromium），以 GitHub Actions 为准：
+`check` 与 `e2e` 两个 job 均已跑绿（verify 41 项全过、无浏览器错误）。
 第三章的战斗手感（走位余量、扑击提前量、连按节奏、触屏三键位置）需要实机调校，详见 doc/28 遗留项。
 东街门口与外勤观察处仍为占位建图 + 专用道具。游戏手感与数值欢迎提 issue 反馈。
 
