@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'arena/**']
   pull_request:
 
 jobs:
@@ -30,16 +30,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install chromium --with-deps
-      - name: Start dev server and run verify
+      - run: npm run build
+      # YZ-14：验收跑生产构建（vite preview），不再验开发模式
+      - name: Serve production build and run verify
+        env:
+          VERIFY_URL: http://127.0.0.1:4173/
         run: |
-          npm run dev -- --host 0.0.0.0 --port 5173 &
+          npx vite preview --host 0.0.0.0 --port 4173 &
           SERVER_PID=$!
           for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:5173/ > /dev/null && break
+            curl -sf http://127.0.0.1:4173/ > /dev/null && break
             sleep 1
           done
+          set +e
           npm run verify
           STATUS=$?
+          set -e
           kill "$SERVER_PID" 2>/dev/null || true
           exit $STATUS
       - uses: actions/upload-artifact@v4

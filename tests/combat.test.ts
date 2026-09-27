@@ -55,6 +55,15 @@ describe('遭遇战 · 开场与基本压迫', () => {
     expect(s.phase).toBe('bare');
   });
 
+  it('YZ-16：起手就贴在门口站着，照样会被撞上按住（burst 不是无敌观影期）', () => {
+    const s = createCombat();
+    const at = { x: ARENA.doorX + 0.3, z: ARENA.doorZ + 0.3 };
+    const evs = run(s, 8, () => ({ player: at }));
+    expect(types(evs)).toContain('grab');
+    expect(s.enemy.state).toBe('grab');
+    expect(s.phase).not.toBe('burst'); // 阶段不会卡死在 burst
+  });
+
   it('站着不动、不挡：会被扑住，挣不开就是失败（不是死亡演出）', () => {
     const s = createCombat();
     const evs = runUntil(s, (c) => c.outcome !== 'none');

@@ -165,7 +165,7 @@ export const CH3_NODES: Ch3Node[] = [
     objective: '活下来。退、挡、别让他贴上来。',
     scene: 'kitchen',
     target: [4.4, 0.9],
-    interactLabel: '—',
+    interactLabel: '退开',
     /** 进场即战：不需要走到目标再按 E，节点成为当前任务时自动开打（见 main.ts） */
     encounter: 'kitchen',
     /** 战斗结束后自动播放下面的事后段落 */

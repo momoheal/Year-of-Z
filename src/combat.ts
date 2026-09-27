@@ -188,7 +188,7 @@ export function isLocked(s: CombatState): boolean {
 }
 
 function prompt(s: CombatState): string {
-  if (s.outcome === 'win') return '刀还在他手里。';
+  if (s.outcome === 'win') return '刀还在你手里。放回砧板。';
   if (s.outcome === 'fail') return '他把你按在了地上。';
   if (s.enemy.state === 'grab') return '连按 空格 / 点「挣」 —— 挣开他';
   if (s.enemy.state === 'clinch') return '就现在 —— 挥（J / 左键 / 点「挥」）';
@@ -290,6 +290,7 @@ export function stepCombat(s: CombatState, input: CombatInput): CombatEvent[] {
 
   switch (e.state) {
     case 'burst': {
+      // YZ-16：burst 期间他并非无害——贴到门口站着照样会被抓住（不改叙事，只防穿帮）。
       e.timer -= dt;
       e.facing = toPlayer;
       if (e.timer <= 0) {
@@ -348,7 +349,7 @@ export function stepCombat(s: CombatState, input: CombatInput): CombatEvent[] {
 
   // ---- 接触判定
   const nowD = dist(e.x, e.z, px, pz);
-  const canHit = e.state === 'chase' || e.state === 'lunge' || e.state === 'windup';
+  const canHit = e.state === 'chase' || e.state === 'lunge' || e.state === 'windup' || e.state === 'burst';
   if (canHit && nowD <= TUNING.contact) {
     const away = Math.atan2(e.x - px, e.z - pz);
     const knock = (m: number) => {
@@ -387,6 +388,11 @@ export function stepCombat(s: CombatState, input: CombatInput): CombatEvent[] {
       knock(TUNING.bareKnock);
       ev.push({ type: 'shove' });
     } else {
+      if (s.phase === 'burst') {
+        // 站在门口被当场撞上：起手那一瞬直接跳过（阶段不能停在 burst）
+        s.phase = s.hasKnife ? 'knife' : s.hasChair ? 'chair' : 'bare';
+        ev.push({ type: 'burst-done' });
+      }
       e.state = 'grab';
       s.grabTimer = TUNING.grabTime;
       s.grabPresses = 0;

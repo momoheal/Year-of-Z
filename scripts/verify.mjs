@@ -1,7 +1,15 @@
 /**
  * scripts/verify.mjs —— 浏览器验收（本地运行）
  *
- * 用法：先 `npm run dev`（或传入 VERIFY_URL 指向静态构建），再：
+ * 覆盖范围（YZ-14 后）：
+ *   1) 第一章：开局 → C01-00 → 背包 → 存档 / 读档 → 移动端布局；
+ *   2) 第三章对话流（?jump=c3&e2e=1）：C03-00…C03-05 六节点，断言「咬伤→袭击」更正与二十二人名单；
+ *   3) 厨房遭遇战（?jump=fight&e2e=1）：拿椅子 → 挡两下散架 → 到备餐台拿刀 → 挡 → 挥 → 进 C03-04；
+ *      另跑一次失败重来路径（站着不动被按住 → 「再来一次」→ 战斗重置）。
+ * 第 2、3 段用页面注入的 `window.__yoz`（仅 ?e2e=1 时挂载）做站位与读状态，
+ * 推进剧情、拾取、格挡、挥击一律走真实 UI / 键盘事件。
+ *
+ * 用法：先 `npm run build && npm run preview`（CI 即如此，验证生产构建），再：
  *   npx playwright install chromium
  *   npm run verify
  *
@@ -89,6 +97,153 @@ try {
 
   // 乱序保护：远距离开南库侧门应提示
   await page.screenshot({ path: `${SHOT_DIR}/04-resumed.png` });
+
+  // ---------- 第三章对话流（?jump=c3） ----------
+  const u = (q) => new URL(`?${q}`, BASE).href;
+  const c3 = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  c3.on('pageerror', (e) => errors.push(String(e)));
+  c3.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+
+  /** 把当前打开的对话点完；遇到选择支按标签关键字点选 */
+  const runDialog = async (pg, pick) => {
+    for (let i = 0; i < 40; i++) {
+      const choices = pg.locator('#dialog-choices:visible .choice-btn');
+      if (await choices.count()) {
+        const want = pick ? pg.locator('#dialog-choices .choice-btn', { hasText: pick }) : choices.first();
+        await want.first().click();
+      } else if (await pg.locator('#dialog:visible').count()) {
+        await pg.click('#dialog');
+      } else {
+        return true;
+      }
+      await pg.waitForTimeout(140);
+    }
+    return false;
+  };
+  const nodeId = (pg) => pg.evaluate(() => window.__yoz.node());
+  /** 走到当前节点目标点、按 E 开始对话、点完（战斗节点自动开打，不在此处处理） */
+  const playNode = async (pg, pick) => {
+    await pg.waitForTimeout(700);
+    await pg.evaluate(() => window.__yoz.toTarget());
+    await pg.waitForTimeout(400);
+    if (!(await pg.locator('#dialog:visible').count())) {
+      await pg.keyboard.press('KeyE');
+      await pg.waitForTimeout(350);
+    }
+    await runDialog(pg, pick);
+    await pg.waitForTimeout(900);
+  };
+
+  await c3.goto(u('jump=c3&e2e=1'), { waitUntil: 'networkidle' });
+  await c3.waitForTimeout(1800);
+  ok(await nodeId(c3) === 'C03-00', '试玩直达：当前任务为 C03-00');
+
+  await playNode(c3);                       // C03-00 今天不煮了
+  ok(await nodeId(c3) === 'C03-01', 'C03-00 完成 → C03-01');
+  await playNode(c3, '先把到场人数记清楚'); // C03-01 十七只碗（两个选择都是对的）
+  ok(await nodeId(c3) === 'C03-02', 'C03-01 完成 → C03-02（十九人到场）');
+  await playNode(c3);                       // C03-02 那间小屋 → 门被拉开
+  ok(await nodeId(c3) === 'C03-03', 'C03-02 完成 → C03-03（遭遇战入口）');
+  ok(!!(await c3.evaluate(() => window.__yoz.combat())), '进入厨房即开打，战斗状态已建立');
+  await c3.screenshot({ path: `${SHOT_DIR}/06-kitchen-fight.png` });
+
+  // 对话流这条线不打完整场：用 e2e 钩子站到刀边，按真实按键赢下来（细节在下一段专测）
+  const winFight = async (pg) => {
+    let holding = false;
+    const hold = async (on) => {
+      if (on === holding) return;
+      await pg.keyboard[on ? 'down' : 'up']('Space');
+      holding = on;
+    };
+    let c = null;
+    for (let i = 0; i < 600; i++) {
+      c = await pg.evaluate(() => window.__yoz.combat());
+      if (!c || c.outcome !== 'none') break;
+      if (c.enemy === 'clinch') {
+        await hold(false);
+        await pg.keyboard.press('KeyJ');
+      } else if (c.enemy === 'grab') {
+        await hold(false);
+        await pg.keyboard.press('Space');
+      } else if (!c.hasKnife && (!c.chairTaken || !c.hasChair)) {
+        await hold(false);
+        await pg.evaluate(() => window.__yoz.toPickup());
+        await pg.keyboard.press('KeyE');
+      } else {
+        await hold(true);
+      }
+      await pg.waitForTimeout(90);
+    }
+    await hold(false);
+    return c;
+  };
+  const result = await winFight(c3);
+  ok(!!result && result.outcome === 'win', '遭遇战可以打赢（拿椅子 → 椅子散架 → 拿刀 → 挡 → 挥）');
+  ok(!!result && result.chairTaken && result.knifeTaken, '顺序被故事锁死：先椅子、后刀');
+  await c3.waitForTimeout(2600);
+  ok(await c3.locator('#dialog:visible').count() === 1, '胜利后停一拍，自动进入 C03-03 事后段落');
+  await runDialog(c3);
+  await c3.waitForTimeout(900);
+  ok(await nodeId(c3) === 'C03-04', '战斗结束 → C03-04（写在背面）');
+  ok(await c3.evaluate(() => window.__yoz.scene()) === 'obsroom', '场景切到外勤观察处');
+  await c3.screenshot({ path: `${SHOT_DIR}/07-obsroom.png` });
+
+  // C03-04：先试被退回的写法（照原样签），再做「咬伤 → 袭击」更正
+  await c3.evaluate(() => window.__yoz.toTarget());
+  await c3.waitForTimeout(300);
+  await c3.keyboard.press('KeyE');
+  await c3.waitForTimeout(400);
+  for (let i = 0; i < 8 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+    await c3.click('#dialog');
+    await c3.waitForTimeout(160);
+  }
+  await c3.locator('#dialog-choices .choice-btn', { hasText: '照原样签了' }).first().click();
+  await c3.waitForTimeout(200);
+  for (let i = 0; i < 4; i++) { await c3.click('#dialog'); await c3.waitForTimeout(180); }
+  ok(await c3.locator('#dialog-choices:visible .choice-btn').count() > 0, '「照原样签」被退回选择页，不写成事实');
+  await c3.locator('#dialog-choices .choice-btn', { hasText: '是袭击' }).first().click();
+  await runDialog(c3);
+  await c3.waitForTimeout(900);
+  ok(await nodeId(c3) === 'C03-05', 'C03-04 完成 → C03-05');
+
+  await playNode(c3);                       // C03-05 临时三天
+  const log3 = await c3.evaluate(() => window.__yoz.logText());
+  ok(log3.includes('袭击') && log3.includes('咬伤'), '日志含「咬伤 → 袭击」更正口径');
+  ok(log3.includes('二十二名'), '日志含二十二人配送名单');
+  ok(!log3.includes('二十二减十九'), '十九与二十二不相减');
+  const flags3 = await c3.evaluate(() => window.__yoz.flags());
+  ok(flags3.includes('chapter3-done'), '第三章完成标记已写入');
+  await c3.screenshot({ path: `${SHOT_DIR}/08-chapter3-done.png` });
+  await c3.close();
+
+  // ---------- 遭遇战专测（?jump=fight）：失败重来路径 ----------
+  const fp = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  fp.on('pageerror', (e) => errors.push(String(e)));
+  fp.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await fp.goto(u('jump=fight&e2e=1'), { waitUntil: 'networkidle' });
+  await fp.waitForTimeout(2000);
+  ok(await nodeId(fp) === 'C03-03', '?jump=fight 直达 C03-03');
+  ok(await fp.locator('#combat-hud:visible').count() === 1, '战斗 HUD 可见');
+  ok(await fp.locator('#combat-hud').textContent().then((t) => !/血/.test(t ?? '')), 'HUD 无敌人血条');
+
+  // 站着不动、什么都不按：被按住 → 挣不开 → 失败面板
+  for (let i = 0; i < 300; i++) {
+    const c = await fp.evaluate(() => window.__yoz.combat());
+    if (c && c.outcome === 'fail') break;
+    await fp.waitForTimeout(100);
+  }
+  const failed3 = await fp.evaluate(() => window.__yoz.combat());
+  ok(!!failed3 && failed3.outcome === 'fail', '站着不动会被按住、挣不开即失败');
+  ok(await fp.locator('#combat-fail:visible').count() === 1, '失败面板出现（不是死亡演出）');
+  await fp.screenshot({ path: `${SHOT_DIR}/09-combat-fail.png` });
+  await fp.click('#btn-combat-retry');
+  await fp.waitForTimeout(600);
+  const again = await fp.evaluate(() => window.__yoz.combat());
+  ok(!!again && again.outcome === 'none' && again.retries === 1, '「再来一次」从门被拉开那一刻重置战斗');
+  ok(!!again && !again.chairTaken && !again.knifeTaken, '重来后椅子与刀都回到原处');
+  const log0 = await fp.evaluate(() => window.__yoz.logText());
+  ok(!log0.includes('冯志远在值班室内发病'), '失败不写任何剧情事实');
+  await fp.close();
 
   // ---------- 移动端 390×844 ----------
   const mp = await browser.newPage({

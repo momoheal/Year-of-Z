@@ -1186,6 +1186,58 @@ function bindUI(): void {
   });
 }
 
+/**
+ * YZ-14 · e2e 钩子：只在 URL 带 `?e2e=1` 时挂载，正式流程不受影响。
+ * 提供的都是"读状态"与"站到目标点"这类脚手架——推进剧情、拾取、格挡、挥击
+ * 仍然走真实 UI 与键盘事件，验收的是运行时行为而不是内部函数。
+ */
+function installE2EHooks(): void {
+  const api = {
+    node: () => currentNode(state)?.id ?? null,
+    scene: () => state.scene,
+    completed: () => [...state.completed],
+    flags: () => [...state.flags],
+    logText: () => state.log.map((l) => l.text).join('\n'),
+    inDialog: () => !!session,
+    /** 站到当前任务目标点（省去跑图，交互与判定仍是真实的） */
+    toTarget: () => {
+      const n = currentNode(state);
+      if (!n || !n.target || n.scene !== state.scene) return false;
+      world.setPlayerPos(n.target[0], n.target[1]);
+      state.player = { x: n.target[0], z: n.target[1] };
+      return true;
+    },
+    /** 战斗内：站到手边那件东西旁（椅子 → 刀），其余仍由按键完成 */
+    toPickup: () => {
+      if (!combat) return false;
+      const pick = combatPickup(combat);
+      if (!pick) return false;
+      world.setPlayerPos(pick.x, pick.z);
+      return true;
+    },
+    teleport: (x: number, z: number) => { world.setPlayerPos(x, z); },
+    combat: () => (combat
+      ? {
+        phase: combat.phase,
+        outcome: combat.outcome,
+        enemy: combat.enemy.state,
+        hasChair: combat.hasChair,
+        hasKnife: combat.hasKnife,
+        chairTaken: combat.chairTaken,
+        knifeTaken: combat.knifeTaken,
+        chairHp: combat.chairHp,
+        grabs: combat.grabs,
+        retries: combat.retries,
+        elapsed: combat.elapsed,
+        prompt: combat.prompt
+      }
+      : null),
+    enemyPos: () => (combat ? { x: combat.enemy.x, z: combat.enemy.z } : null),
+    playerPos: () => world.playerPos()
+  };
+  (window as unknown as { __yoz: typeof api }).__yoz = api;
+}
+
 function boot(): void {
   bootTitle();
   // ?jump=c3 / ?jump=fight：试玩直达（见 jumpToChapter3）
@@ -1208,6 +1260,7 @@ function boot(): void {
   // 首次操作解锁音频（浏览器自动播放限制）
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
   window.addEventListener('keydown', () => audio.unlock(), { once: true });
+  if (new URLSearchParams(location.search).get('e2e') === '1') installE2EHooks();
   if (jump === 'c3' || jump === 'fight') jumpToChapter3(jump === 'fight');
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }

@@ -103,8 +103,11 @@ TypeScript · Vite 5 · three.js 0.169 · cannon-es · lucide（图标）· vite
 
 ## ⚠️ 验收状态（如实记录）
 
-自动化验证（`tsc` / `vitest` 31/31 / `vite build`）全绿；Playwright 运行时验收脚本已就位但
-**尚未在交付环境执行**（该环境无法下载 Chromium），`scripts/verify.mjs` 也尚未覆盖第三章遭遇战。
+自动化验证（`tsc` / `vitest` 32/32 / `vite build`）全绿。`scripts/verify.mjs` 已补全第三章：
+六节点对话流（`?jump=c3`，断言「咬伤 → 袭击」更正与二十二人名单）、厨房遭遇战整场
+（拿椅子 → 椅子散架 → 拿刀 → 挡 → 挥 → 进 C03-04）以及失败重来路径（`?jump=fight`）；
+CI 的 e2e job 改为跑 **生产构建**（`vite preview`）并上传厨房战斗中 / 观察处截图。
+该脚本仍**无法在本地交付环境执行**（沙箱下载不了 Chromium），以 GitHub Actions 的 e2e job 为准。
 第三章的战斗手感（走位余量、扑击提前量、连按节奏、触屏三键位置）需要实机调校，详见 doc/28 遗留项。
 东街门口与外勤观察处仍为占位建图 + 专用道具。游戏手感与数值欢迎提 issue 反馈。
 
