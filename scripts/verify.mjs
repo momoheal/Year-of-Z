@@ -36,10 +36,47 @@ const ok = (cond, name) => {
 
 const browser = await chromium.launch();
 try {
+  const u = (q) => new URL(`?${q}`, BASE).href;
+  /** 统一建页：较短的默认超时，避免单个点击卡满 30 秒 */
+  const mkPage = async (opts) => {
+    const pg = await browser.newPage(opts);
+    pg.setDefaultTimeout(8000);
+    pg.on('pageerror', (e) => errors.push(String(e)));
+    pg.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    return pg;
+  };
+  /** 把当前打开的对话点完；遇到选择支按标签关键字点选 */
+  const runDialog = async (pg, pick) => {
+    for (let i = 0; i < 40; i++) {
+      const choices = pg.locator('#dialog-choices:visible .choice-btn');
+      if (await choices.count()) {
+        const want = pick ? pg.locator('#dialog-choices .choice-btn', { hasText: pick }) : choices.first();
+        await want.first().click();
+      } else if (await pg.locator('#dialog:visible').count()) {
+        await pg.click('#dialog');
+      } else {
+        return true;
+      }
+      await pg.waitForTimeout(140);
+    }
+    return false;
+  };
+  const nodeId = (pg) => pg.evaluate(() => window.__yoz.node());
+  /** 走到当前节点目标点、按 E 开始对话、点完（战斗节点自动开打，不在此处处理） */
+  const playNode = async (pg, pick) => {
+    await pg.waitForTimeout(700);
+    await pg.evaluate(() => window.__yoz.toTarget());
+    await pg.waitForTimeout(400);
+    if (!(await pg.locator('#dialog:visible').count())) {
+      await pg.keyboard.press('KeyE');
+      await pg.waitForTimeout(350);
+    }
+    await runDialog(pg, pick);
+    await pg.waitForTimeout(900);
+  };
+
   // ---------- 桌面 1280×720 ----------
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  const page = await mkPage({ viewport: { width: 1280, height: 720 } });
 
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1800);
@@ -71,10 +108,7 @@ try {
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(400);
   ok(await page.locator('#dialog:visible').count() === 1, '对话面板打开');
-  for (let i = 0; i < 9; i++) {
-    await page.click('#dialog');
-    await page.waitForTimeout(160);
-  }
+  ok(await runDialog(page), 'C01-00 对话可以点完（点到面板自行关闭为止）');
   await page.waitForTimeout(500);
   ok((await page.textContent('#task-title'))?.includes('C01-01'), '完成 C01-00 后任务推进到 C01-01');
   await page.screenshot({ path: `${SHOT_DIR}/02-node-done.png` });
@@ -103,40 +137,7 @@ try {
   await page.screenshot({ path: `${SHOT_DIR}/04-resumed.png` });
 
   // ---------- 第三章对话流（?jump=c3） ----------
-  const u = (q) => new URL(`?${q}`, BASE).href;
-  const c3 = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  c3.on('pageerror', (e) => errors.push(String(e)));
-  c3.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-
-  /** 把当前打开的对话点完；遇到选择支按标签关键字点选 */
-  const runDialog = async (pg, pick) => {
-    for (let i = 0; i < 40; i++) {
-      const choices = pg.locator('#dialog-choices:visible .choice-btn');
-      if (await choices.count()) {
-        const want = pick ? pg.locator('#dialog-choices .choice-btn', { hasText: pick }) : choices.first();
-        await want.first().click();
-      } else if (await pg.locator('#dialog:visible').count()) {
-        await pg.click('#dialog');
-      } else {
-        return true;
-      }
-      await pg.waitForTimeout(140);
-    }
-    return false;
-  };
-  const nodeId = (pg) => pg.evaluate(() => window.__yoz.node());
-  /** 走到当前节点目标点、按 E 开始对话、点完（战斗节点自动开打，不在此处处理） */
-  const playNode = async (pg, pick) => {
-    await pg.waitForTimeout(700);
-    await pg.evaluate(() => window.__yoz.toTarget());
-    await pg.waitForTimeout(400);
-    if (!(await pg.locator('#dialog:visible').count())) {
-      await pg.keyboard.press('KeyE');
-      await pg.waitForTimeout(350);
-    }
-    await runDialog(pg, pick);
-    await pg.waitForTimeout(900);
-  };
+  const c3 = await mkPage({ viewport: { width: 1280, height: 720 } });
 
   await c3.goto(u('jump=c3&e2e=1'), { waitUntil: 'networkidle' });
   await c3.waitForTimeout(1800);
@@ -221,9 +222,7 @@ try {
   await c3.close();
 
   // ---------- 遭遇战专测（?jump=fight）：失败重来路径 ----------
-  const fp = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  fp.on('pageerror', (e) => errors.push(String(e)));
-  fp.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  const fp = await mkPage({ viewport: { width: 1280, height: 720 } });
   await fp.goto(u('jump=fight&e2e=1'), { waitUntil: 'networkidle' });
   await fp.waitForTimeout(2000);
   ok(await nodeId(fp) === 'C03-03', '?jump=fight 直达 C03-03');
@@ -250,12 +249,11 @@ try {
   await fp.close();
 
   // ---------- 移动端 390×844 ----------
-  const mp = await browser.newPage({
+  const mp = await mkPage({
     viewport: { width: 390, height: 844 },
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
     hasTouch: true
   });
-  mp.on('pageerror', (e) => errors.push(String(e)));
   await mp.goto(BASE, { waitUntil: 'networkidle' });
   await mp.waitForTimeout(1500);
   ok(await mp.locator('#taskcard:visible').count() === 1, '移动端任务卡可见');
