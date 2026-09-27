@@ -103,7 +103,7 @@ TypeScript · Vite 5 · three.js 0.169 · cannon-es · lucide（图标）· vite
 
 ## ⚠️ 验收状态（如实记录）
 
-自动化验证（`tsc` / `vitest` 32/32 / `vite build`）全绿。`scripts/verify.mjs` 已补全第三章：
+自动化验证（`tsc` / `vitest` 34/34 / `vite build`）全绿。`scripts/verify.mjs` 已补全第三章：
 六节点对话流（`?jump=c3`，断言「咬伤 → 袭击」更正与二十二人名单）、厨房遭遇战整场
 （拿椅子 → 椅子散架 → 拿刀 → 挡 → 挥 → 进 C03-04）以及失败重来路径（`?jump=fight`）；
 CI 的 e2e job 改为跑 **生产构建**（`vite preview`）并上传厨房战斗中 / 观察处截图。

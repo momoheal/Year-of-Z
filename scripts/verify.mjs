@@ -220,6 +220,7 @@ try {
   ok(log3.includes('袭击') && log3.includes('咬伤'), '日志含「咬伤 → 袭击」更正口径');
   ok(log3.includes('二十二名'), '日志含二十二人配送名单');
   ok(!log3.includes('二十二减十九'), '十九与二十二不相减');
+  ok(log3.includes('背面') && log3.includes('冯志远的名字'), 'YZ-15：写在背面那一页落到日志里');
   const flags3 = await c3.evaluate(() => window.__yoz.flags());
   ok(flags3.includes('chapter3-done'), '第三章完成标记已写入');
   await c3.screenshot({ path: `${SHOT_DIR}/08-chapter3-done.png` });

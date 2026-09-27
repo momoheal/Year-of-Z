@@ -257,6 +257,36 @@ describe('第三章 · 今天不煮了（遭遇战章）', () => {
     expect(s.log.some((l) => l.type === 'uncertain' && l.text.includes('记不全'))).toBe(true);
   });
 
+  it('YZ-15 找回的三处情绪锚点：外套翻袖口、"弄死了"、写在背面', () => {
+    const text = (id: string) => {
+      const n = NODES.find((x) => x.id === id)!;
+      return [...n.pages, ...(n.choices ?? []).flatMap((c) => c.pages)].map((p) => p.text).join('\n');
+    };
+    // ① doc/08「不再叫他」：冯师傅唯一一次"收衣服"的动作
+    const c3 = text('C03-03');
+    expect(c3).toContain('是小远的');
+    expect(c3).toContain('袖子翻了过来');
+    // ② doc/08 收束句：全章情绪最低点，落在母亲电话里
+    expect(text('C03-04')).toContain('我今天把一个人弄死了');
+    // ③ doc/09 末章：章名《写在背面》的出处，也是第四章《回执》的钩子
+    const c5 = text('C03-05');
+    expect(c5).toContain('翻到背面');
+    expect(c5).toContain('冯志远的名字');
+    expect(c5).toContain('我拿了厨房的刀');
+    expect(c5).not.toContain('我没有别的办法。'); // 这句他最后没有写
+  });
+
+  it('写在背面这一页只进日志、不进背包，也不改变对外口径', () => {
+    const s = playAll();
+    const back = s.log.find((l) => l.node === 'C03-05' && l.text.includes('背面'));
+    expect(back).toBeTruthy();
+    expect(back!.type).toBe('fact');
+    expect(back!.text).toContain('不交给任何人');
+    // 私下写的一页不是对外陈述：不出现在任何道具里
+    const items = s.itemJournal.flatMap((d) => d.add).join(',');
+    expect(items).not.toContain('notebook-back');
+  });
+
   it('东街口径：十九人是到场、二十二人是核实后需配送，数字不相减', () => {
     const s = playAll();
     const ch3 = s.log.filter((l) => l.node.startsWith('C03-')).map((l) => l.text).join('\n');
