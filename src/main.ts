@@ -1004,7 +1004,8 @@ function updateCombatGuide(): void {
 function syncCombatHud(): void {
   const hud = $('combat-hud');
   const touch = $('combat-touch');
-  if (!combat || combat.outcome === 'fail') {
+  // 事后段落一开始就收起战斗 HUD：它不该压在对话上面（YZ-14 e2e 里被点击拦截暴露）
+  if (!combat || combat.outcome === 'fail' || session) {
     hud.classList.add('hidden');
     touch.classList.add('hidden');
     return;

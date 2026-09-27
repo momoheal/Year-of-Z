@@ -53,7 +53,8 @@ try {
         const want = pick ? pg.locator('#dialog-choices .choice-btn', { hasText: pick }) : choices.first();
         await want.first().click();
       } else if (await pg.locator('#dialog:visible').count()) {
-        await pg.click('#dialog');
+        // 用键盘翻页：不受 HUD 遮挡影响（对话中 Space / Enter 即翻页）
+        await pg.keyboard.press('Space');
       } else {
         return true;
       }
