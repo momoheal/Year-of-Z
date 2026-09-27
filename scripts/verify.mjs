@@ -27,7 +27,11 @@ const errors = [];
 let failed = 0;
 const ok = (cond, name) => {
   console.log(`${cond ? '✓' : '✗'} ${name}`);
-  if (!cond) failed++;
+  if (!cond) {
+    failed++;
+    // GitHub Actions 注解：失败项在 run 摘要里直接可见（日志下载常受限）
+    if (process.env.GITHUB_ACTIONS) console.log(`::error title=verify::${name}`);
+  }
 };
 
 const browser = await chromium.launch();
