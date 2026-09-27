@@ -199,13 +199,16 @@ try {
   await c3.waitForTimeout(300);
   await c3.keyboard.press('KeyE');
   await c3.waitForTimeout(400);
-  for (let i = 0; i < 8 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
-    await c3.click('#dialog');
+  for (let i = 0; i < 10 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+    await c3.keyboard.press('Space');
     await c3.waitForTimeout(160);
   }
   await c3.locator('#dialog-choices .choice-btn', { hasText: '照原样签了' }).first().click();
   await c3.waitForTimeout(200);
-  for (let i = 0; i < 4; i++) { await c3.click('#dialog'); await c3.waitForTimeout(180); }
+  for (let i = 0; i < 4 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+    await c3.keyboard.press('Space');
+    await c3.waitForTimeout(200);
+  }
   ok(await c3.locator('#dialog-choices:visible .choice-btn').count() > 0, '「照原样签」被退回选择页，不写成事实');
   await c3.locator('#dialog-choices .choice-btn', { hasText: '是袭击' }).first().click();
   await runDialog(c3);
