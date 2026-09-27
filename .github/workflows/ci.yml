@@ -43,9 +43,13 @@ jobs:
             sleep 1
           done
           set +e
-          npm run verify
+          npm run verify > verify.log 2>&1
           STATUS=$?
           set -e
+          cat verify.log
+          if [ $STATUS -ne 0 ]; then
+            echo "::error title=verify-tail::$(tail -c 3000 verify.log | tr '\n' '~')"
+          fi
           kill "$SERVER_PID" 2>/dev/null || true
           exit $STATUS
       - uses: actions/upload-artifact@v4
