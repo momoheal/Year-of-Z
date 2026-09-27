@@ -258,9 +258,20 @@ try {
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
     hasTouch: true
   });
-  await mp.goto(BASE, { waitUntil: 'networkidle' });
+  await mp.goto(u('e2e=1'), { waitUntil: 'networkidle' });
   await mp.waitForTimeout(1500);
   ok(await mp.locator('#taskcard:visible').count() === 1, '移动端任务卡可见');
+  // 每个 page 都是独立 context（localStorage 不共享）：先在移动端自己跑完一个节点，再验「继续上次」
+  await mp.click('#btn-start');
+  await mp.waitForTimeout(900);
+  await mp.evaluate(() => { const y = window.__yoz; if (y) y.toTarget(); });
+  await mp.waitForTimeout(300);
+  await mp.keyboard.press('KeyE');
+  await mp.waitForTimeout(400);
+  await runDialog(mp);
+  await mp.waitForTimeout(800);
+  await mp.reload({ waitUntil: 'networkidle' });
+  await mp.waitForTimeout(1500);
   ok(await mp.locator('#btn-continue:visible').count() === 1, '移动端可继续存档');
   const overflow = await mp.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   ok(!overflow, '移动端无横向溢出');
