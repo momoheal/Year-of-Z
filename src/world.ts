@@ -9,298 +9,19 @@
 
 import * as THREE from 'three';
 import { Body, Box, Sphere, Vec3, World as PhysWorld } from 'cannon-es';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GameState, LightMode, LightPreset, NodeEffects, SceneId } from './story';
 import { KITCHEN_WALLS, PARK_WALLS, SCENE_BOUNDS } from './mapdata';
+import { SCENERY_BLOCKERS, buildScenery } from './scenery';
 import { ARENA, type CombatState } from './combat';
+import {
+  C, PALLET, PLAYER_R, WALK_SPEED, RUN_SPEED,
+  mat, box, cyl, sph, canvasTexture, textBoard, groundTexture, aoPatch,
+  mergeColoredBoxes, makePerson, makeTruck, makeVan, makeDog
+} from './buildkit';
 
 export type WorldEvent = NonNullable<NodeEffects['worldEvent']>;
 
 const V = THREE.Vector3;
-
-// ---------------------------------------------------------------- 调色板（湿润灰绿 / 褪色白墙 / 锈红 / 暖黄）
-const C = {
-  ground: 0x57604f,
-  groundDark: 0x454c3f,
-  concrete: 0x8b9187,
-  concreteDark: 0x6f7469,
-  wallFade: 0xc9c5b8,
-  wallGrey: 0x9aa096,
-  rust: 0x9a4f2f,
-  rustDark: 0x6f3a24,
-  roofGrey: 0x7d8387,
-  metal: 0x8f979e,
-  metalDark: 0x5b646c,
-  wood: 0x8b6f4e,
-  green: 0x6f8a5a,
-  amber: 0xd9a05b,
-  truckBody: 0x7a8a94,
-  truckCab: 0x5b6a74,
-  cloth: 0xbdb6a8,
-  sheet: 0xd8d4c8,
-  dog: 0x8d8a84
-};
-const PALLET = 0x9a7f58;
-
-const PLAYER_R = 0.45;
-const WALK_SPEED = 3.3;
-const RUN_SPEED = 5.2;
-
-// ---------------------------------------------------------------- 材质与几何帮手（共享几何/材质）
-
-const unitBox = new THREE.BoxGeometry(1, 1, 1);
-const unitCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
-const unitSph = new THREE.SphereGeometry(0.5, 12, 10);
-
-function mat(color: number, extra: Partial<THREE.MeshLambertMaterialParameters> = {}): THREE.MeshLambertMaterial {
-  return new THREE.MeshLambertMaterial({ color, ...extra });
-}
-
-function box(parent: THREE.Object3D, w: number, h: number, d: number, m: THREE.Material | number,
-             x = 0, y = 0, z = 0, ry = 0): THREE.Mesh {
-  const mesh = new THREE.Mesh(unitBox, typeof m === 'number' ? mat(m) : m);
-  mesh.scale.set(w, h, d);
-  mesh.position.set(x, y, z);
-  mesh.rotation.y = ry;
-  mesh.castShadow = h > 0.5;
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-function cyl(parent: THREE.Object3D, r: number, h: number, m: THREE.Material | number,
-             x = 0, y = 0, z = 0, opts: { rx?: number; rz?: number } = {}): THREE.Mesh {
-  const mesh = new THREE.Mesh(unitCyl, typeof m === 'number' ? mat(m) : m);
-  mesh.scale.set(r * 2, h, r * 2);
-  mesh.position.set(x, y, z);
-  if (opts.rx) mesh.rotation.x = opts.rx;
-  if (opts.rz) mesh.rotation.z = opts.rz;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-function sph(parent: THREE.Object3D, r: number, m: THREE.Material | number,
-             x = 0, y = 0, z = 0): THREE.Mesh {
-  const mesh = new THREE.Mesh(unitSph, typeof m === 'number' ? mat(m) : m);
-  mesh.scale.setScalar(r * 2);
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-/** Canvas 生成材质 */
-function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const g = c.getContext('2d')!;
-  draw(g);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 2;
-  return t;
-}
-
-function plane(parent: THREE.Object3D, w: number, h: number, m: THREE.Material,
-               x = 0, y = 0, z = 0, ry = 0): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
-  mesh.position.set(x, y, z);
-  mesh.rotation.y = ry;
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-function textBoard(parent: THREE.Object3D, w: number, h: number, tex: THREE.CanvasTexture,
-                   x: number, y: number, z: number, ry = 0): THREE.Mesh {
-  const m = new THREE.MeshLambertMaterial({ map: tex });
-  return plane(parent, w, h, m, x, y, z, ry);
-}
-
-/** 地面纹理：湿色斑块 */
-function groundTexture(base: string, patch: string, blotches: number): THREE.CanvasTexture {
-  const t = canvasTexture(512, 512, (g) => {
-    g.fillStyle = base;
-    g.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < blotches; i++) {
-      const x = Math.random() * 512, y = Math.random() * 512, r = 12 + Math.random() * 44;
-      g.fillStyle = patch;
-      g.globalAlpha = 0.06 + Math.random() * 0.16;
-      g.beginPath();
-      g.ellipse(x, y, r, r * (0.4 + Math.random() * 0.6), Math.random() * 3, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.globalAlpha = 1;
-  });
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
-/** 假环境光阴影贴片（径向渐变，无光照成本） */
-let aoTexture: THREE.CanvasTexture | null = null;
-function getAOTexture(): THREE.CanvasTexture {
-  if (!aoTexture) {
-    aoTexture = canvasTexture(128, 128, (g) => {
-      const grad = g.createRadialGradient(64, 64, 8, 64, 64, 62);
-      grad.addColorStop(0, 'rgba(0,0,0,0.5)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = grad;
-      g.fillRect(0, 0, 128, 128);
-    });
-  }
-  return aoTexture;
-}
-
-function aoPatch(parent: THREE.Object3D, w: number, d: number, x: number, z: number, opacity = 0.5): void {
-  const m = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, d),
-    new THREE.MeshBasicMaterial({ map: getAOTexture(), transparent: true, opacity, depthWrite: false })
-  );
-  m.rotation.x = -Math.PI / 2;
-  m.position.set(x, 0.021, z);
-  parent.add(m);
-}
-
-/** 同材质静态盒体合并：一次绘制代替多次（散件、托盘、货架等） */
-function mergeColoredBoxes(
-  parent: THREE.Object3D,
-  items: { w: number; h: number; d: number; c: number; x: number; y: number; z: number; ry?: number }[]
-): void {
-  const buckets = new Map<number, THREE.BufferGeometry[]>();
-  const m4 = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const up = new V(0, 1, 0);
-  for (const it of items) {
-    const g = unitBox.clone();
-    q.setFromAxisAngle(up, it.ry ?? 0);
-    m4.compose(new V(it.x, it.y, it.z), q, new V(it.w, it.h, it.d));
-    g.applyMatrix4(m4);
-    if (!buckets.has(it.c)) buckets.set(it.c, []);
-    buckets.get(it.c)!.push(g);
-  }
-  for (const [c, geos] of buckets) {
-    const merged = mergeGeometries(geos, false);
-    if (!merged) continue;
-    const mesh = new THREE.Mesh(merged, mat(c));
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    parent.add(mesh);
-    for (const g of geos) g.dispose();
-  }
-}
-
-// ---------------------------------------------------------------- 人物
-
-interface PersonOpt { coat: number; pants?: number; skin?: number; cap?: number; vest?: number; scale?: number }
-
-/** 原创积木人仔比例：方躯干、独立四肢、圆柱头与顶粒，全部由基础几何生成。 */
-function makePerson(o: PersonOpt): THREE.Group {
-  const g = new THREE.Group();
-  const s = o.scale ?? 1;
-  const pants = o.pants ?? 0x4a4d50;
-  const skin = o.skin ?? 0xd8b89a;
-
-  // 双腿以髋为轴，脚块略向前，移动时能清楚读出交替步态。
-  const mkLeg = (side: number): THREE.Group => {
-    const leg = new THREE.Group();
-    leg.position.set(side * 0.105 * s, 0.51 * s, 0);
-    box(leg, 0.18 * s, 0.43 * s, 0.2 * s, pants, 0, -0.215 * s, 0);
-    box(leg, 0.19 * s, 0.1 * s, 0.29 * s, pants, 0, -0.42 * s, 0.045 * s);
-    g.add(leg);
-    return leg;
-  };
-  const legL = mkLeg(-1);
-  const legR = mkLeg(1);
-
-  // 方形躯干与肩臂给远景剪影一个明确的“积木人仔”轮廓。
-  box(g, 0.43 * s, 0.52 * s, 0.3 * s, o.coat, 0, 0.79 * s, 0);
-  const mkArm = (side: number): THREE.Group => {
-    const arm = new THREE.Group();
-    arm.position.set(side * 0.28 * s, 0.98 * s, 0);
-    box(arm, 0.13 * s, 0.39 * s, 0.16 * s, o.coat, 0, -0.195 * s, 0);
-    cyl(arm, 0.065 * s, 0.11 * s, skin, 0, -0.43 * s, 0);
-    g.add(arm);
-    return arm;
-  };
-  const armL = mkArm(-1);
-  const armR = mkArm(1);
-
-  // 圆柱头（含顶粒/帽）成组，保留点头与跑动视线补偿。
-  const head = new THREE.Group();
-  head.position.set(0, 1.25 * s, 0);
-  cyl(head, 0.155 * s, 0.25 * s, skin);
-  if (o.cap) {
-    cyl(head, 0.17 * s, 0.07 * s, o.cap, 0, 0.15 * s, 0);
-    box(head, 0.2 * s, 0.035 * s, 0.16 * s, o.cap, 0, 0.12 * s, 0.14 * s);
-  } else {
-    cyl(head, 0.075 * s, 0.045 * s, skin, 0, 0.145 * s, 0);
-  }
-  g.add(head);
-
-  if (o.vest) {
-    const v = box(g, 0.45 * s, 0.43 * s, 0.32 * s, mat(o.vest), 0, 0.8 * s, 0);
-    v.castShadow = false;
-  }
-  g.userData.legL = legL;
-  g.userData.legR = legR;
-  g.userData.armL = armL;
-  g.userData.armR = armR;
-  g.userData.head = head;
-  return g;
-}
-
-/** 简易车 */
-function makeTruck(): THREE.Group {
-  const g = new THREE.Group();
-  box(g, 4.6, 1.9, 2.2, C.truckBody, -1.0, 1.55, 0);
-  box(g, 1.7, 1.5, 2.1, C.truckCab, 2.4, 1.3, 0);
-  box(g, 0.5, 0.5, 2.24, C.metalDark, -3.5, 0.85, 0); // 尾板
-  const wheelM = mat(0x2a2d2e);
-  const hub = mat(0x777d80);
-  for (const wx of [-2.4, -1.2, 2.4]) {
-    const w1 = cyl(g, 0.42, 0.3, wheelM, wx, 0.42, -1.02, { rx: Math.PI / 2 });
-    const w2 = cyl(g, 0.42, 0.3, wheelM, wx, 0.42, 1.02, { rx: Math.PI / 2 });
-    cyl(g, 0.16, 0.32, hub, wx, 0.42, -1.03, { rx: Math.PI / 2 });
-    cyl(g, 0.16, 0.32, hub, wx, 0.42, 1.03, { rx: Math.PI / 2 });
-    w2.castShadow = w1.castShadow = false;
-  }
-  return g;
-}
-
-function makeVan(): THREE.Group {
-  const g = new THREE.Group();
-  box(g, 4.2, 1.7, 1.9, 0xe6e8e4, 0, 1.35, 0);
-  box(g, 1.1, 1.25, 1.86, 0xd2d5d0, 2.2, 1.1, 0);
-  box(g, 4.24, 0.34, 1.92, 0xc0503f, 0, 1.05, 0);
-  const lampMat = mat(0xd0503f, { emissive: 0xd0503f, emissiveIntensity: 0.7 });
-  box(g, 0.5, 0.16, 0.3, lampMat, 0.4, 2.32, -0.4);
-  box(g, 0.5, 0.16, 0.3, mat(0x3f6fd0, { emissive: 0x3f6fd0, emissiveIntensity: 0.7 }), 0.4, 2.32, 0.4);
-  const wheelM = mat(0x2a2d2e);
-  for (const wx of [-1.5, 1.6]) {
-    cyl(g, 0.36, 0.26, wheelM, wx, 0.36, -0.92, { rx: Math.PI / 2 });
-    cyl(g, 0.36, 0.26, wheelM, wx, 0.36, 0.92, { rx: Math.PI / 2 });
-  }
-  return g;
-}
-
-function makeDog(): THREE.Group {
-  const g = new THREE.Group();
-  const body = box(g, 0.62, 0.3, 0.26, C.dog, 0, 0.36, 0);
-  body.castShadow = false;
-  box(g, 0.22, 0.2, 0.2, C.dog, 0.36, 0.5, 0);
-  box(g, 0.1, 0.09, 0.12, 0x7d7a74, 0.5, 0.46, 0); // 吻部
-  const tail = box(g, 0.26, 0.05, 0.05, C.dog, -0.4, 0.46, 0);
-  tail.geometry = unitBox;
-  tail.name = 'tail';
-  for (const lx of [-0.2, 0.2]) {
-    box(g, 0.06, 0.24, 0.06, 0x7d7a74, lx, 0.12, -0.07);
-    box(g, 0.06, 0.24, 0.06, 0x7d7a74, lx, 0.12, 0.09);
-  }
-  g.userData.tail = tail;
-  return g;
-}
 
 // ---------------------------------------------------------------- 光照预设
 
@@ -585,7 +306,7 @@ export class GameWorld {
       else if (id === 'quarantine') this.buildQuarantine(g);
       else if (id === 'gate') this.buildGate(g);
       else if (id === 'kitchen') this.buildKitchen(g);
-      else this.buildPlaceholder(g, id);
+      else this.buildScenery(g, id);
     }
     return g;
   }
@@ -603,7 +324,7 @@ export class GameWorld {
     else if (id === 'quarantine') this.quarantinePhysics(this.phys);
     else if (id === 'gate') this.gatePhysics(this.phys);
     else if (id === 'kitchen') this.kitchenPhysics(this.phys);
-    else this.placeholderPhysics(this.phys, id);
+    else this.sceneryPhysics(this.phys, id);
     this.playerGroup.position.set(spawn.x, 0, spawn.z);
     this.lastMove.x = 0;
     this.lastMove.z = 0;
@@ -1729,252 +1450,45 @@ export class GameWorld {
   private setKitchenAftermath(on: boolean): void {
     if (this.kitchenAfter) this.kitchenAfter.visible = on;
   }
+  // ------------------------------------------------------------ 第二—四章场景
+  // 已由 src/scenery.ts 正式建景（低多边形几何 + Canvas 纹理，按程序生成，无远端资源）。
+  // world.ts 这里只负责装配：把灯具/浮尘登记进昼夜与动画列表，并给静物生成物理体。
 
-  // ------------------------------------------------------------ 第二章占位场景
-  // 数据层已接入（story.ts + src/data/chapter2.ts），5 个新场景暂用统一占位建图：
-  // 纯地面 + 边界墙 + 场景名牌，保证剧情推进/移动/交互可玩；精细人物与道具留待后续任务。
-
-  private static readonly PLACEHOLDER_LABEL: Partial<Record<SceneId, string>> = {
-    yard: '小区院内 · 板车出发点',
-    road: '沿街卡点 · 铁路下穿道',
-    pump: '检修便道 · 泵站通道',
-    liuanli: '柳岸里 · 北侧卸货口',
-    canteen: '小区临时食堂',
-    dongjie: '旧城东街 · 职工宿舍铁网门',
-    obsroom: '外勤观察处 · 原培训中心',
-    home: '许晨家 · 门口那把椅子',
-    repair: '物资站工具棚 · 陈工的工坊',
-    waterfix: '净水设备维修点',
-    gridoffice: '网格员办公室',
-    trackside: '铁路边 · 卸货的路口'
-  };
-
-  private static readonly PLACEHOLDER_TINT: Partial<Record<SceneId, [string, string]>> = {
-    yard: ['#5f6a58', '#454e40'],
-    road: ['#6a675c', '#4c493f'],
-    pump: ['#5a6468', '#40484c'],
-    liuanli: ['#63665c', '#484a40'],
-    canteen: ['#6a6050', '#4c4638'],
-    dongjie: ['#63605a', '#474540'],
-    obsroom: ['#5c6166', '#42474b'],
-    home: ['#6b6155', '#4c453c'],
-    repair: ['#5e6166', '#43464a'],
-    waterfix: ['#576066', '#3e454a'],
-    gridoffice: ['#67645b', '#4a4841'],
-    trackside: ['#6a6a63', '#4b4b46']
-  };
-
-  private buildPlaceholder(g: THREE.Group, id: SceneId): void {
+  private buildScenery(g: THREE.Group, id: SceneId): void {
+    const ok = buildScenery(g, id, {
+      lampGlow: this.lampGlow,
+      lampLights: this.lampLights,
+      dusts: this.dusts
+    });
+    if (ok) return;
+    // 兜底（理论上不会走到）：纯地面，保证不出现空场景
     const b = SCENE_BOUNDS[id];
-    const w = b.maxX - b.minX;
-    const d = b.maxZ - b.minZ;
-    const cx = (b.minX + b.maxX) / 2;
-    const cz = (b.minZ + b.maxZ) / 2;
-    const [base, patch] = GameWorld.PLACEHOLDER_TINT[id] ?? ['#5f665a', '#454b40'];
-    const gt = groundTexture(base, patch, 40);
-    gt.repeat.set(Math.max(2, Math.round(w / 6)), Math.max(2, Math.round(d / 6)));
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: gt }));
+    const gt = groundTexture('#5f665a', '#454b40', 40);
+    gt.repeat.set(4, 4);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(b.maxX - b.minX, b.maxZ - b.minZ),
+      new THREE.MeshLambertMaterial({ map: gt })
+    );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(cx, 0, cz);
+    ground.position.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
     ground.receiveShadow = true;
     g.add(ground);
-    // 场景名牌与第二章关键地标：先用低模几何建立可辨认的空间关系，
-    // 后续可在不改变节点坐标的前提下替换为精细资产。
-    const sign = canvasTexture(360, 64, (c) => {
-      c.fillStyle = '#3a3e36'; c.fillRect(0, 0, 360, 64);
-      c.fillStyle = '#d8d4c4'; c.font = 'bold 22px "Noto Sans CJK SC", sans-serif';
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(GameWorld.PLACEHOLDER_LABEL[id] ?? id, 180, 34);
-    });
-    textBoard(g, 5, 0.9, sign, cx, 2.0, b.minZ + 0.5);
-    this.buildChapter2Props(g, id);
-    this.buildChapter3Props(g, id);
-    this.buildChapter4Props(g, id);
-  }
-
-  private buildChapter2Props(g: THREE.Group, id: SceneId): void {
-    if (id === 'yard') {
-      // 出发院：板车、工具架与雨衣箱
-      box(g, 2.8, 0.18, 1.5, C.wood, 0, 0.35, 6);
-      box(g, 2.4, 0.12, 0.12, C.metalDark, 0, 0.55, 5.35);
-      cyl(g, 0.38, 0.16, C.metalDark, -0.95, 0.18, 6, { rx: Math.PI / 2 });
-      cyl(g, 0.38, 0.16, C.metalDark, 0.95, 0.18, 6, { rx: Math.PI / 2 });
-      box(g, 1.2, 1.4, 0.75, C.metalDark, -4.5, 0.7, 6.5);
-      box(g, 0.8, 0.05, 0.9, C.cloth, 2.8, 0.85, 5.5);
-    } else if (id === 'road') {
-      // 下穿道：桥体、积水带与侧停的白色面包车
-      box(g, 18, 3.4, 2.2, C.concreteDark, 6, 2.2, -5.5);
-      box(g, 3.5, 1.35, 1.7, C.sheet, 10, 0.7, -1.8);
-      box(g, 2.4, 0.9, 0.08, C.metalDark, 10, 1.0, -0.92);
-      box(g, 12, 0.025, 1.2, 0x53666a, 6, 0.03, -2.8);
-    } else if (id === 'pump') {
-      // 检修便道：泵站、沙袋和铁路围栏
-      box(g, 3.8, 3.2, 3.2, C.concrete, 7, 1.6, 6);
-      cyl(g, 0.55, 4.5, C.metalDark, 5.2, 2.25, 5.1);
-      for (let i = 0; i < 5; i++) box(g, 1.0, 0.35, 0.45, C.wood, -4 + i * 0.8, 0.18 + i * 0.05, 8);
-      for (let i = 0; i < 6; i++) box(g, 0.08, 1.5, 0.08, C.metalDark, -6 + i * 2.2, 0.75, -1);
-    } else if (id === 'liuanli') {
-      // 柳岸里卸货口：铁网门、蓝色托盘和一袋袋物资
-      box(g, 0.16, 2.6, 12, C.metalDark, -3.8, 1.3, 7);
-      box(g, 3.6, 0.16, 2.0, PALLET, 1.5, 0.25, 5.5);
-      for (let i = 0; i < 4; i++) box(g, 0.72, 0.85, 0.72, C.sheet, 0.4 + (i % 2) * 0.85, 0.75 + Math.floor(i / 2) * 0.8, 5.5);
-      box(g, 1.4, 1.2, 0.08, C.metal, 4, 0.8, 5.2);
-    } else if (id === 'canteen') {
-      // 临时食堂：发餐窗口、长桌与登记桌
-      box(g, 9, 2.8, 1.0, C.wallFade, 0, 1.4, -5.5);
-      box(g, 2.2, 0.9, 0.12, C.metalDark, 0, 1.2, -4.9);
-      box(g, 5.5, 0.18, 1.0, C.wood, 0, 0.9, 1.5);
-      box(g, 1.8, 0.75, 0.9, C.wood, -4, 0.75, 2.4);
-    }
-  }
-
-  private buildChapter3Props(g: THREE.Group, id: SceneId): void {
-    if (id === 'dongjie') {
-      // 两栋旧楼之间的铁网门：砖头压住下面的缺口，塑料条挂在网上
-      for (let i = 0; i < 9; i++) box(g, 0.06, 2.2, 0.06, C.metalDark, -8 + i * 2, 1.1, -2.4);
-      box(g, 16, 0.08, 0.08, C.metalDark, 0, 2.2, -2.4);
-      box(g, 1.4, 2.2, 0.1, mat(0x6f766e), 0.4, 1.1, -2.4);
-      for (let i = 0; i < 6; i++) box(g, 0.5, 0.18, 0.28, 0x9a6a55, -6 + i * 2.3, 0.09, -2.3);
-      for (const bx of [-7.5, 7.5]) {
-        const h = 12 + (bx > 0 ? 3 : 0);
-        box(g, 6.5, h, 7, mat(0x85827a), bx, h / 2, -7.5).castShadow = false;
-      }
-      // 街口的社区小货车与卸下来的餐箱
-      box(g, 3.6, 1.5, 1.8, mat(0x9aa39c), -6.5, 1.0, 6.5);
-      box(g, 1.3, 1.2, 1.7, mat(0x7d8a86), -4.2, 0.85, 6.5);
-      for (let i = 0; i < 3; i++) box(g, 0.7, 0.4, 0.5, C.sheet, -1.2 + i * 0.85, 0.2, -1.2);
-      // 墙边那辆电动车（后架两只塑料筐、车把上一副洗旧的布手套）
-      const ev = new THREE.Group();
-      ev.position.set(4.6, 0, -0.6);
-      ev.rotation.y = -0.5;
-      g.add(ev);
-      box(ev, 1.3, 0.16, 0.36, 0x6f7a80, 0, 0.55, 0);
-      cyl(ev, 0.26, 0.1, 0x2a2d2e, -0.55, 0.26, 0, { rx: Math.PI / 2 });
-      cyl(ev, 0.26, 0.1, 0x2a2d2e, 0.55, 0.26, 0, { rx: Math.PI / 2 });
-      box(ev, 0.5, 0.36, 0.5, 0xb8b1a0, -0.5, 0.82, 0);
-      box(ev, 0.5, 0.36, 0.5, 0x9aa8b0, 0.42, 0.82, 0);
-      box(ev, 0.16, 0.08, 0.3, C.cloth, 0.62, 1.04, 0);
-    } else if (id === 'obsroom') {
-      // 原培训中心：床、收了一半的投影幕、门口的桌子（补充询问在这里做）
-      box(g, 1.0, 0.36, 2.1, mat(0x8c8f8a), -3.6, 0.36, 0.6);
-      box(g, 1.05, 0.16, 2.15, C.sheet, -3.6, 0.6, 0.6);
-      box(g, 0.9, 0.12, 0.4, 0xd8d4c8, -3.6, 0.7, -0.3);
-      box(g, 4.6, 0.06, 0.12, mat(0xe4e0d4), 0.5, 2.2, -3.6).castShadow = false;
-      box(g, 4.6, 1.5, 0.05, mat(0xf0ece0), 0.5, 1.45, -3.6).castShadow = false;
-      box(g, 1.7, 0.1, 0.9, C.wood, 1.6, 0.76, -1.2);
-      for (const [lx, lz] of [[0.85, -0.4], [-0.85, -0.4], [0.85, 0.4], [-0.85, 0.4]] as const) {
-        box(g, 0.07, 0.76, 0.07, C.metalDark, 1.6 + lx, 0.38, -1.2 + lz);
-      }
-      box(g, 0.44, 0.06, 0.44, C.wood, 2.6, 0.46, -1.2);
-      box(g, 0.44, 0.5, 0.06, C.wood, 2.8, 0.72, -1.2);
-      // 走廊灯与教室编号牌
-      const tag = canvasTexture(128, 64, (c) => {
-        c.fillStyle = '#2f3532'; c.fillRect(0, 0, 128, 64);
-        c.fillStyle = '#d8d4c4'; c.font = 'bold 26px "Noto Sans CJK SC", sans-serif';
-        c.textAlign = 'center'; c.fillText('三 · 12', 64, 42);
-      });
-      textBoard(g, 0.9, 0.45, tag, -3.6, 2.2, -3.55);
-      const pl = new THREE.PointLight(0xdfe6ea, 0, 10, 2);
-      pl.position.set(0, 2.6, 1.5);
-      g.add(pl);
-      this.lampLights.push(pl);
-    }
   }
 
 
-  /**
-   * 第四章《回执》占位道具：五个场景都是"说话与核对"的小场地，
-   * 只用低模几何立起可辨认的空间关系（门口的椅子、拆了一半的推车、料架、办公桌、月台边的箱堆）。
-   * 节点坐标不依赖这些模型，后续替换精细资产不必改数据。
-   */
-  private buildChapter4Props(g: THREE.Group, id: SceneId): void {
-    if (id === 'home') {
-      // 进门就是那把递过来的椅子；桌上按日期排好的病历
-      box(g, 0.44, 0.06, 0.44, C.wood, 0.9, 0.46, -0.6);
-      box(g, 0.44, 0.5, 0.06, C.wood, 0.9, 0.72, -0.4);
-      box(g, 1.6, 0.1, 0.9, C.wood, -1.6, 0.76, -1.6);
-      for (let i = 0; i < 4; i++) box(g, 0.3, 0.04, 0.42, mat(0xe0dccb), -2.1 + i * 0.32, 0.83 + i * 0.02, -1.6);
-      box(g, 0.9, 2.1, 0.12, C.wood, 0, 1.05, -3.6);            // 门
-      box(g, 0.5, 0.1, 0.3, mat(0x6a5f52), -0.9, 0.05, -3.2);   // 门口的鞋
-      box(g, 0.5, 0.1, 0.3, mat(0x6a5f52), -0.35, 0.05, -3.2);
-    } else if (id === 'repair') {
-      // 工具棚（灰灰）+ 工坊：拆了一半的送餐推车、报废架、落在地上的轮子
-      box(g, 2.6, 1.9, 2.2, C.metalDark, -4.6, 0.95, 3.2);
-      box(g, 0.8, 0.12, 0.6, C.cloth, -4.6, 0.12, 1.9);
-      box(g, 1.9, 0.14, 1.1, C.wood, 1.2, 0.72, 1.0);
-      box(g, 1.4, 0.1, 0.1, C.metalDark, 1.2, 0.9, 0.5);
-      cyl(g, 0.3, 0.12, C.metalDark, 0.4, 0.3, 1.5, { rx: Math.PI / 2 });
-      cyl(g, 0.3, 0.12, C.metalDark, 2.0, 0.3, 1.5, { rx: Math.PI / 2 });
-      cyl(g, 0.3, 0.12, C.metalDark, 2.9, 0.15, -0.6, { rz: Math.PI / 2 });   // 装歪了又拆下来的那只
-      for (let i = 0; i < 3; i++) box(g, 3.2, 0.1, 0.8, C.metal, 4.6, 0.5 + i * 0.7, -2.4);
-      box(g, 1.2, 0.8, 0.8, C.sheet, -1.8, 0.4, -2.6);
-    } else if (id === 'waterfix') {
-      // 维修点：修好的净水支架（第一行打勾的那批）、空着的第二个工位
-      box(g, 1.4, 0.14, 1.4, C.metal, -1.2, 0.85, -1.8);
-      for (const [lx, lz] of [[0.6, 0.6], [-0.6, 0.6], [0.6, -0.6], [-0.6, -0.6]] as const) {
-        box(g, 0.1, 0.85, 0.1, C.metalDark, -1.2 + lx, 0.42, -1.8 + lz);
-      }
-      cyl(g, 0.5, 1.2, C.sheet, -1.2, 1.5, -1.8);
-      box(g, 1.4, 0.06, 1.4, C.concreteDark, 1.6, 0.03, -1.8);  // 空工位：地上只有固定孔
-      box(g, 2.6, 2.4, 0.2, C.wallFade, 0, 1.2, -4.4);
-      box(g, 1.6, 0.9, 0.9, C.sheet, 3.4, 0.45, 1.2);
-    } else if (id === 'gridoffice') {
-      // 办公桌、抽屉里拿出来的报表、墙上的片区图
-      box(g, 1.8, 0.1, 1.0, C.wood, -1.4, 0.76, -1.6);
-      for (const [lx, lz] of [[0.8, 0.4], [-0.8, 0.4], [0.8, -0.4], [-0.8, -0.4]] as const) {
-        box(g, 0.07, 0.76, 0.07, C.metalDark, -1.4 + lx, 0.38, -1.6 + lz);
-      }
-      box(g, 0.42, 0.02, 0.3, mat(0xe6e2d4), -1.4, 0.82, -1.6);
-      box(g, 0.44, 0.06, 0.44, C.wood, -1.4, 0.46, -0.4);
-      box(g, 0.9, 1.2, 0.5, C.metalDark, 0.6, 0.6, -2.0);
-      box(g, 2.4, 1.6, 0.06, mat(0xd6d2c2), 2.4, 1.7, -3.9).castShadow = false;
-    } else if (id === 'trackside') {
-      // 路基、车皮、一层层码好的验收箱
-      box(g, 16, 0.4, 3.2, C.concreteDark, 0, 0.2, -3.6);
-      box(g, 7.0, 2.6, 2.6, mat(0x6e7a74), -1.0, 1.5, -3.6);
-      for (let i = 0; i < 8; i++) {
-        box(g, 0.8, 0.5, 0.6, C.sheet, 3.2 + (i % 4) * 0.95, 0.25 + Math.floor(i / 4) * 0.55, 0.4);
-      }
-      box(g, 0.1, 2.2, 0.1, C.metalDark, -5.4, 1.1, -0.6);
-      box(g, 1.1, 0.5, 0.06, mat(0xb9b2a0), -5.4, 2.0, -0.6);
-    }
-  }
-
-  private placeholderPhysics(ctx: PhysCtx, id: SceneId): void {
+  private sceneryPhysics(ctx: PhysCtx, id: SceneId): void {
     const b = SCENE_BOUNDS[id];
     const hx = (b.maxX - b.minX) / 2;
     const hz = (b.maxZ - b.minZ) / 2;
     const cx = (b.minX + b.maxX) / 2;
     const cz = (b.minZ + b.maxZ) / 2;
+    // 场地外框
     this.addWall(ctx, cx, b.minZ - 0.5, hx + 1, 0.5, 3);
     this.addWall(ctx, cx, b.maxZ + 0.5, hx + 1, 0.5, 3);
     this.addWall(ctx, b.minX - 0.5, cz, 0.5, hz + 1, 3);
     this.addWall(ctx, b.maxX + 0.5, cz, 0.5, hz + 1, 3);
-    // 第三章两处占位场景的主要静物给上阻挡：铁网、楼体、床与桌子
-    if (id === 'dongjie') {
-      this.addWall(ctx, -4.6, -2.4, 4.6, 0.25, 2.2);  // 铁网（西段）
-      this.addWall(ctx, 4.6, -2.4, 4.6, 0.25, 2.2);   // 铁网（东段，中间留门）
-      this.addWall(ctx, -7.5, -7.5, 3.3, 3.5, 12);
-      this.addWall(ctx, 7.5, -7.5, 3.3, 3.5, 12);
-      this.addWall(ctx, -5.6, 6.5, 2.4, 0.95, 1.5);   // 社区小货车
-    } else if (id === 'obsroom') {
-      this.addWall(ctx, -3.6, 0.6, 0.55, 1.1, 0.8);   // 床
-      this.addWall(ctx, 1.6, -1.2, 0.9, 0.5, 0.8);    // 询问用的桌子
-    } else if (id === 'home') {
-      this.addWall(ctx, -1.6, -1.6, 0.85, 0.5, 0.8);  // 排病历的桌子
-      this.addWall(ctx, 0, -3.6, 0.5, 0.15, 2.1);     // 门
-    } else if (id === 'repair') {
-      this.addWall(ctx, -4.6, 3.2, 1.35, 1.15, 1.9);  // 工具棚
-      this.addWall(ctx, 4.6, -2.4, 1.7, 0.45, 1.9);   // 报废架
-    } else if (id === 'waterfix') {
-      this.addWall(ctx, -1.2, -1.8, 0.75, 0.75, 1.0); // 修好的支架
-      this.addWall(ctx, 0, -4.4, 1.4, 0.2, 2.4);      // 维修点山墙
-    } else if (id === 'gridoffice') {
-      this.addWall(ctx, -1.4, -1.6, 0.95, 0.55, 0.8); // 办公桌
-      this.addWall(ctx, 0.6, -2.0, 0.5, 0.3, 1.2);    // 文件柜
-    } else if (id === 'trackside') {
-      this.addWall(ctx, 0, -3.6, 8, 1.7, 2.6);        // 路基与车皮
-    }
+    // 建景里的静物：看得见的东西挡得住（单一来源在 scenery.ts）
+    for (const w of SCENERY_BLOCKERS[id] ?? []) this.addWall(ctx, w.x, w.z, w.hx, w.hz, w.h ?? 3, w.name);
   }
 
   // ------------------------------------------------------------ 状态同步与事件

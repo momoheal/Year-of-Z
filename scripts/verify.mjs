@@ -288,6 +288,25 @@ try {
   await c4.screenshot({ path: `${SHOT_DIR}/11-act1-end.png` });
   await c4.close();
 
+  // ---------- 建景冒烟：逐个场景切过去，确认都能建起来且不报错 ----------
+  const sc = await mkPage({ viewport: { width: 1280, height: 720 } });
+  await sc.goto(u('jump=c3&e2e=1'), { waitUntil: 'networkidle' });
+  await sc.waitForTimeout(1800);
+  const SCENES = ['park', 'depot', 'quarantine', 'gate', 'yard', 'road', 'pump', 'liuanli', 'canteen',
+    'dongjie', 'kitchen', 'obsroom', 'home', 'repair', 'waterfix', 'gridoffice', 'trackside'];
+  const sceneErrors = [];
+  sc.on('pageerror', (e) => sceneErrors.push(String(e)));
+  for (const id of SCENES) {
+    const okScene = await sc.evaluate((s) => window.__yoz.showScene(s), id);
+    if (!okScene) sceneErrors.push(`showScene 失败: ${id}`);
+    await sc.waitForTimeout(260);
+    if (id === 'canteen') await sc.screenshot({ path: `${SHOT_DIR}/12-canteen.png` });
+    if (id === 'trackside') await sc.screenshot({ path: `${SHOT_DIR}/13-trackside.png` });
+  }
+  ok(sceneErrors.length === 0, `17 个场景全部建景成功、无运行时错误（${sceneErrors.length}）`);
+  for (const e of sceneErrors.slice(0, 3)) console.log('  scene:', e);
+  await sc.close();
+
   // ---------- 遭遇战专测（?jump=fight）：失败重来路径 ----------
   const fp = await mkPage({ viewport: { width: 1280, height: 720 } });
   await fp.goto(u('jump=fight&e2e=1'), { waitUntil: 'networkidle' });

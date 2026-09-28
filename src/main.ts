@@ -1228,6 +1228,14 @@ function installE2EHooks(): void {
       return true;
     },
     teleport: (x: number, z: number) => { world.setPlayerPos(x, z); },
+    /** 只切画面（不动剧情状态）：用于逐个场景的建景冒烟测试 */
+    showScene: (id: string) => {
+      const sid = id as typeof state.scene;
+      const spawn = SPAWNS[sid];
+      if (!spawn) return false;
+      world.setScene(sid, spawn);
+      return true;
+    },
     combat: () => (combat
       ? {
         phase: combat.phase,
