@@ -226,6 +226,62 @@ try {
   await c3.screenshot({ path: `${SHOT_DIR}/08-chapter3-done.png` });
   await c3.close();
 
+  // ---------- 第四章《回执》对话流（?jump=c4） ----------
+  const c4 = await mkPage({ viewport: { width: 1280, height: 720 } });
+  await c4.goto(u('jump=c4&e2e=1'), { waitUntil: 'networkidle' });
+  await c4.waitForTimeout(1800);
+  ok(await nodeId(c4) === 'C04-00', '试玩直达：当前任务为 C04-00');
+  ok(await c4.evaluate(() => window.__yoz.flags()).then((f) => f.includes('chapter3-done')),
+    '前三章按默认选择补全（含第三章完成标记）');
+
+  // C04-00：先试被退回的"让送饭的人代签"，再单列上门核查
+  await c4.evaluate(() => window.__yoz.toTarget());
+  await c4.waitForTimeout(300);
+  await c4.keyboard.press('KeyE');
+  await c4.waitForTimeout(400);
+  for (let i = 0; i < 12 && !(await c4.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+    await c4.keyboard.press('Space');
+    await c4.waitForTimeout(150);
+  }
+  await c4.locator('#dialog-choices .choice-btn', { hasText: '顺手替他们签' }).first().click();
+  await c4.waitForTimeout(200);
+  for (let i = 0; i < 4 && !(await c4.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+    await c4.keyboard.press('Space');
+    await c4.waitForTimeout(200);
+  }
+  ok(await c4.locator('#dialog-choices:visible .choice-btn').count() > 0,
+    '「让送饭的人代签」被退回选择页：送饭的人不是核查的人');
+  ok(await nodeId(c4) === 'C04-00', '被退回不推进任务');
+  await c4.locator('#dialog-choices .choice-btn', { hasText: '核查员' }).first().click();
+  await runDialog(c4);
+  await c4.waitForTimeout(900);
+  ok(await nodeId(c4) === 'C04-01', 'C04-00 完成 → C04-01（第四天）');
+
+  await playNode(c4);                                   // C04-01 第四天
+  ok(await nodeId(c4) === 'C04-02', 'C04-01 完成 → C04-02');
+  await playNode(c4, '名单交给送饭的人');               // C04-02 回家不是好了
+  ok(await c4.evaluate(() => window.__yoz.scene()) === 'home', '场景切到家里');
+  ok(await nodeId(c4) === 'C04-03', 'C04-02 完成 → C04-03');
+  await playNode(c4);                                   // C04-03 修好的轮子
+  ok(await c4.evaluate(() => window.__yoz.scene()) === 'repair', '场景切到工坊');
+  await c4.screenshot({ path: `${SHOT_DIR}/10-repair.png` });
+  ok(await nodeId(c4) === 'C04-04', 'C04-03 完成 → C04-04');
+  await playNode(c4, '第二行留白');                     // C04-04 两行记录
+  ok(await nodeId(c4) === 'C04-05', 'C04-04 完成 → C04-05');
+  await playNode(c4);                                   // C04-05 也有他那一户
+  ok(await c4.evaluate(() => window.__yoz.scene()) === 'trackside', '收尾场景切到铁路边的路口');
+
+  const log4 = await c4.evaluate(() => window.__yoz.logText());
+  ok(log4.includes('无加工回执') && log4.includes('不作挪用结论'), '第二行留白：无回执不写成挪用');
+  ok(log4.includes('这不算核过'), '转录签名被如实记为"不算核过"');
+  ok(log4.includes('回执仍未补齐'), '第一幕不收在"已解决"上：回执仍未补齐');
+  ok(!/无罪|已结案/.test(log4), '不替调查下结论');
+  const flags4 = await c4.evaluate(() => window.__yoz.flags());
+  ok(flags4.includes('chapter4-done'), '第四章完成标记已写入');
+  ok(await c4.locator('#end-screen:visible').count() === 1, '第一幕收束：结尾画面出现');
+  await c4.screenshot({ path: `${SHOT_DIR}/11-act1-end.png` });
+  await c4.close();
+
   // ---------- 遭遇战专测（?jump=fight）：失败重来路径 ----------
   const fp = await mkPage({ viewport: { width: 1280, height: 720 } });
   await fp.goto(u('jump=fight&e2e=1'), { waitUntil: 'networkidle' });

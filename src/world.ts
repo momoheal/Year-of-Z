@@ -610,7 +610,8 @@ export class GameWorld {
     this.camFocus.set(spawn.x, 0, spawn.z); // 切场景时镜头直接落位，不跨场景拖尾
     this.camera.position.set(spawn.x + this.camOffset.x, this.camOffset.y, spawn.z + this.camOffset.z);
     this.camera.lookAt(spawn.x, 1, spawn.z);
-    this.dog.visible = id === 'park' || id === 'depot';
+    // 灰灰：园区与物资站之外，第四章的工坊与路口也带着它（doc/11）
+    this.dog.visible = id === 'park' || id === 'depot' || id === 'repair' || id === 'trackside';
     if (id !== 'kitchen' && this.foe) this.foe.visible = false;
     if (id === 'depot') {
       // 灰灰已移交工具棚：蹲在园外工具棚边
@@ -618,6 +619,14 @@ export class GameWorld {
       this.dog.rotation.y = -0.6;
     } else if (id === 'park') {
       this.placeDogByState();
+    } else if (id === 'repair') {
+      // 工具棚外：拴在门口，听见金属落地就往里看
+      this.dog.position.set(-3.4, 0, 2.0);
+      this.dog.rotation.y = 0.8;
+    } else if (id === 'trackside') {
+      // 牵着站在路边，等车过去
+      this.dog.position.set(spawn.x + 0.9, 0, spawn.z + 0.2);
+      this.dog.rotation.y = Math.PI;
     }
   }
 
@@ -1732,7 +1741,12 @@ export class GameWorld {
     liuanli: '柳岸里 · 北侧卸货口',
     canteen: '小区临时食堂',
     dongjie: '旧城东街 · 职工宿舍铁网门',
-    obsroom: '外勤观察处 · 原培训中心'
+    obsroom: '外勤观察处 · 原培训中心',
+    home: '许晨家 · 门口那把椅子',
+    repair: '物资站工具棚 · 陈工的工坊',
+    waterfix: '净水设备维修点',
+    gridoffice: '网格员办公室',
+    trackside: '铁路边 · 卸货的路口'
   };
 
   private static readonly PLACEHOLDER_TINT: Partial<Record<SceneId, [string, string]>> = {
@@ -1742,7 +1756,12 @@ export class GameWorld {
     liuanli: ['#63665c', '#484a40'],
     canteen: ['#6a6050', '#4c4638'],
     dongjie: ['#63605a', '#474540'],
-    obsroom: ['#5c6166', '#42474b']
+    obsroom: ['#5c6166', '#42474b'],
+    home: ['#6b6155', '#4c453c'],
+    repair: ['#5e6166', '#43464a'],
+    waterfix: ['#576066', '#3e454a'],
+    gridoffice: ['#67645b', '#4a4841'],
+    trackside: ['#6a6a63', '#4b4b46']
   };
 
   private buildPlaceholder(g: THREE.Group, id: SceneId): void {
@@ -1770,6 +1789,7 @@ export class GameWorld {
     textBoard(g, 5, 0.9, sign, cx, 2.0, b.minZ + 0.5);
     this.buildChapter2Props(g, id);
     this.buildChapter3Props(g, id);
+    this.buildChapter4Props(g, id);
   }
 
   private buildChapter2Props(g: THREE.Group, id: SceneId): void {
@@ -1861,6 +1881,65 @@ export class GameWorld {
     }
   }
 
+
+  /**
+   * 第四章《回执》占位道具：五个场景都是"说话与核对"的小场地，
+   * 只用低模几何立起可辨认的空间关系（门口的椅子、拆了一半的推车、料架、办公桌、月台边的箱堆）。
+   * 节点坐标不依赖这些模型，后续替换精细资产不必改数据。
+   */
+  private buildChapter4Props(g: THREE.Group, id: SceneId): void {
+    if (id === 'home') {
+      // 进门就是那把递过来的椅子；桌上按日期排好的病历
+      box(g, 0.44, 0.06, 0.44, C.wood, 0.9, 0.46, -0.6);
+      box(g, 0.44, 0.5, 0.06, C.wood, 0.9, 0.72, -0.4);
+      box(g, 1.6, 0.1, 0.9, C.wood, -1.6, 0.76, -1.6);
+      for (let i = 0; i < 4; i++) box(g, 0.3, 0.04, 0.42, mat(0xe0dccb), -2.1 + i * 0.32, 0.83 + i * 0.02, -1.6);
+      box(g, 0.9, 2.1, 0.12, C.wood, 0, 1.05, -3.6);            // 门
+      box(g, 0.5, 0.1, 0.3, mat(0x6a5f52), -0.9, 0.05, -3.2);   // 门口的鞋
+      box(g, 0.5, 0.1, 0.3, mat(0x6a5f52), -0.35, 0.05, -3.2);
+    } else if (id === 'repair') {
+      // 工具棚（灰灰）+ 工坊：拆了一半的送餐推车、报废架、落在地上的轮子
+      box(g, 2.6, 1.9, 2.2, C.metalDark, -4.6, 0.95, 3.2);
+      box(g, 0.8, 0.12, 0.6, C.cloth, -4.6, 0.12, 1.9);
+      box(g, 1.9, 0.14, 1.1, C.wood, 1.2, 0.72, 1.0);
+      box(g, 1.4, 0.1, 0.1, C.metalDark, 1.2, 0.9, 0.5);
+      cyl(g, 0.3, 0.12, C.metalDark, 0.4, 0.3, 1.5, { rx: Math.PI / 2 });
+      cyl(g, 0.3, 0.12, C.metalDark, 2.0, 0.3, 1.5, { rx: Math.PI / 2 });
+      cyl(g, 0.3, 0.12, C.metalDark, 2.9, 0.15, -0.6, { rz: Math.PI / 2 });   // 装歪了又拆下来的那只
+      for (let i = 0; i < 3; i++) box(g, 3.2, 0.1, 0.8, C.metal, 4.6, 0.5 + i * 0.7, -2.4);
+      box(g, 1.2, 0.8, 0.8, C.sheet, -1.8, 0.4, -2.6);
+    } else if (id === 'waterfix') {
+      // 维修点：修好的净水支架（第一行打勾的那批）、空着的第二个工位
+      box(g, 1.4, 0.14, 1.4, C.metal, -1.2, 0.85, -1.8);
+      for (const [lx, lz] of [[0.6, 0.6], [-0.6, 0.6], [0.6, -0.6], [-0.6, -0.6]] as const) {
+        box(g, 0.1, 0.85, 0.1, C.metalDark, -1.2 + lx, 0.42, -1.8 + lz);
+      }
+      cyl(g, 0.5, 1.2, C.sheet, -1.2, 1.5, -1.8);
+      box(g, 1.4, 0.06, 1.4, C.concreteDark, 1.6, 0.03, -1.8);  // 空工位：地上只有固定孔
+      box(g, 2.6, 2.4, 0.2, C.wallFade, 0, 1.2, -4.4);
+      box(g, 1.6, 0.9, 0.9, C.sheet, 3.4, 0.45, 1.2);
+    } else if (id === 'gridoffice') {
+      // 办公桌、抽屉里拿出来的报表、墙上的片区图
+      box(g, 1.8, 0.1, 1.0, C.wood, -1.4, 0.76, -1.6);
+      for (const [lx, lz] of [[0.8, 0.4], [-0.8, 0.4], [0.8, -0.4], [-0.8, -0.4]] as const) {
+        box(g, 0.07, 0.76, 0.07, C.metalDark, -1.4 + lx, 0.38, -1.6 + lz);
+      }
+      box(g, 0.42, 0.02, 0.3, mat(0xe6e2d4), -1.4, 0.82, -1.6);
+      box(g, 0.44, 0.06, 0.44, C.wood, -1.4, 0.46, -0.4);
+      box(g, 0.9, 1.2, 0.5, C.metalDark, 0.6, 0.6, -2.0);
+      box(g, 2.4, 1.6, 0.06, mat(0xd6d2c2), 2.4, 1.7, -3.9).castShadow = false;
+    } else if (id === 'trackside') {
+      // 路基、车皮、一层层码好的验收箱
+      box(g, 16, 0.4, 3.2, C.concreteDark, 0, 0.2, -3.6);
+      box(g, 7.0, 2.6, 2.6, mat(0x6e7a74), -1.0, 1.5, -3.6);
+      for (let i = 0; i < 8; i++) {
+        box(g, 0.8, 0.5, 0.6, C.sheet, 3.2 + (i % 4) * 0.95, 0.25 + Math.floor(i / 4) * 0.55, 0.4);
+      }
+      box(g, 0.1, 2.2, 0.1, C.metalDark, -5.4, 1.1, -0.6);
+      box(g, 1.1, 0.5, 0.06, mat(0xb9b2a0), -5.4, 2.0, -0.6);
+    }
+  }
+
   private placeholderPhysics(ctx: PhysCtx, id: SceneId): void {
     const b = SCENE_BOUNDS[id];
     const hx = (b.maxX - b.minX) / 2;
@@ -1881,6 +1960,20 @@ export class GameWorld {
     } else if (id === 'obsroom') {
       this.addWall(ctx, -3.6, 0.6, 0.55, 1.1, 0.8);   // 床
       this.addWall(ctx, 1.6, -1.2, 0.9, 0.5, 0.8);    // 询问用的桌子
+    } else if (id === 'home') {
+      this.addWall(ctx, -1.6, -1.6, 0.85, 0.5, 0.8);  // 排病历的桌子
+      this.addWall(ctx, 0, -3.6, 0.5, 0.15, 2.1);     // 门
+    } else if (id === 'repair') {
+      this.addWall(ctx, -4.6, 3.2, 1.35, 1.15, 1.9);  // 工具棚
+      this.addWall(ctx, 4.6, -2.4, 1.7, 0.45, 1.9);   // 报废架
+    } else if (id === 'waterfix') {
+      this.addWall(ctx, -1.2, -1.8, 0.75, 0.75, 1.0); // 修好的支架
+      this.addWall(ctx, 0, -4.4, 1.4, 0.2, 2.4);      // 维修点山墙
+    } else if (id === 'gridoffice') {
+      this.addWall(ctx, -1.4, -1.6, 0.95, 0.55, 0.8); // 办公桌
+      this.addWall(ctx, 0.6, -2.0, 0.5, 0.3, 1.2);    // 文件柜
+    } else if (id === 'trackside') {
+      this.addWall(ctx, 0, -3.6, 8, 1.7, 2.6);        // 路基与车皮
     }
   }
 
@@ -1941,6 +2034,14 @@ export class GameWorld {
         this.setKitchenAftermath(true);
         break;
       case 'obs-morning':
+        break;
+      // 第四章《回执》：占位场景的状态都由静物直接呈现，暂无额外切换
+      case 'scan-arrived':
+      case 'day-four':
+      case 'back-home':
+      case 'cart-fixed':
+      case 'grid-recount':
+      case 'train-in':
         break;
     }
   }

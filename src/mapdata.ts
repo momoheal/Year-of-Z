@@ -24,7 +24,13 @@ export const SPAWNS: Record<SceneId, { x: number; z: number }> = {
   // 第三章
   dongjie: { x: 0, z: 6 },       // 铁网门外的街口
   kitchen: { x: 0.5, z: 4.0 },   // 临时厨房（活动室）门内
-  obsroom: { x: -0.5, z: 3.2 }   // 外勤观察处走廊侧
+  obsroom: { x: -0.5, z: 3.2 },  // 外勤观察处走廊侧
+  // 第四章《回执》占位场景
+  home: { x: 0, z: 3.2 },        // 自家门口（进门就是那把椅子）
+  repair: { x: -2.6, z: 4.2 },   // 物资站工具棚外 → 旁边的工坊
+  waterfix: { x: -2.0, z: 3.0 }, // 净水设备维修点院子
+  gridoffice: { x: 1.6, z: 3.2 },// 网格员办公室门口
+  trackside: { x: -3.0, z: 4.0 } // 铁路边的路口
 };
 
 export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
@@ -38,7 +44,12 @@ export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
   canteen: '小区临时食堂 —— 傍晚',
   dongjie: '旧城东街 · 职工宿舍门口 —— 上午',
   kitchen: '东街临时厨房 · 原职工活动室',
-  obsroom: '外勤观察处 —— 当夜至次日'
+  obsroom: '外勤观察处 —— 当夜至次日',
+  home: '许晨家 —— 回家那天傍晚',
+  repair: '物资站工具棚 · 旁边的工坊 —— 又过了几天',
+  waterfix: '净水设备维修点 —— 查料那天',
+  gridoffice: '网格员办公室 —— 第三次见面',
+  trackside: '铁路边 · 卸货的路口 —— 当天'
 };
 
 /** 场景可活动外框（测试校验目标点在界内） */
@@ -56,7 +67,13 @@ export const SCENE_BOUNDS: Record<SceneId, { minX: number; maxX: number; minZ: n
   // 第三章：厨房是遭遇战场地，外框与 combat.ts 的 ARENA 对齐（留 0.4 米墙厚余量）
   dongjie: { minX: -10, maxX: 10, minZ: -6, maxZ: 10 },
   kitchen: { minX: -7, maxX: 7, minZ: -5.2, maxZ: 5.2 },
-  obsroom: { minX: -6, maxX: 6, minZ: -4, maxZ: 5 }
+  obsroom: { minX: -6, maxX: 6, minZ: -4, maxZ: 5 },
+  // 第四章：都是"说话与核对"的小场地，外框按节点 target 留边
+  home: { minX: -5, maxX: 5, minZ: -4, maxZ: 4.5 },
+  repair: { minX: -7, maxX: 7, minZ: -5, maxZ: 5.5 },
+  waterfix: { minX: -6, maxX: 6, minZ: -5, maxZ: 4.5 },
+  gridoffice: { minX: -5, maxX: 5, minZ: -4, maxZ: 4.5 },
+  trackside: { minX: -8, maxX: 8, minZ: -5, maxZ: 5.5 }
 };
 
 // ---------------------------------------------------------------- 园区静态阻挡（与 world.ts parkPhysics 同步被消费）

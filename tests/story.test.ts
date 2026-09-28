@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SCENE_BOUNDS, SPAWNS } from '../src/mapdata';
 import {
   canInteract,
   ITEMS,
@@ -296,6 +297,91 @@ describe('第三章 · 今天不煮了（遭遇战章）', () => {
     // 本章不揭示自愈，也不给冯师傅的暴露结果下结论
     expect(ch3).not.toMatch(/自愈|痊愈|不会感染|已排除感染/);
     expect(s.log.some((l) => l.node.startsWith('C03-') && l.type === 'uncertain')).toBe(true);
+  });
+});
+
+describe('第四章 · 回执（第一幕收束）', () => {
+  it('六个节点、无战斗、无武器；场景与出生点/外框数据齐备', () => {
+    const ch4 = NODES.filter((n) => n.id.startsWith('C04-'));
+    expect(ch4).toHaveLength(6);
+    expect(ch4.some((n) => n.encounter)).toBe(false);
+    for (const n of ch4) {
+      expect(SPAWNS[n.scene]).toBeTruthy();
+      const b = SCENE_BOUNDS[n.scene];
+      expect(b).toBeTruthy();
+      expect(n.target[0]).toBeGreaterThanOrEqual(b.minX);
+      expect(n.target[0]).toBeLessThanOrEqual(b.maxX);
+      expect(n.target[1]).toBeGreaterThanOrEqual(b.minZ);
+      expect(n.target[1]).toBeLessThanOrEqual(b.maxZ);
+      expect(n.interactLabel).not.toBe('—');
+    }
+    // 第一幕在这里收束：最后一个节点就是全书当前进度的终点
+    expect(NODES[NODES.length - 1].id).toBe('C04-05');
+  });
+
+  it('核查口径：代签与"两行一起打勾"都被拒绝，且不改变任何状态', () => {
+    const s = playUntil('C04-00');
+    const bad = completeNode(s, 'C04-00', 'sign-by-courier');
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.rejected).toBe(true);
+    expect(s.completed).not.toContain('C04-00');
+    expect(completeNode(s, 'C04-00', 'split-two').ok).toBe(true);
+
+    const t = playUntil('C04-04');
+    const bad2 = completeNode(t, 'C04-04', 'both-tick');
+    expect(bad2.ok).toBe(false);
+    expect(t.flags).not.toContain('trace-two-lines');
+    expect(completeNode(t, 'C04-04', 'one-tick').ok).toBe(true);
+    // 第二行只能留白：不写挪用，也不写已使用
+    const trace = t.log.filter((l) => l.node === 'C04-04').map((l) => l.text).join('\n');
+    expect(trace).toContain('无加工回执');
+    expect(trace).toContain('不作挪用结论');
+    expect(trace).not.toMatch(/确系挪用|贪污|已全部使用/);
+  });
+
+  it('第一幕收束但不写"解决了"：回执未齐、手续在补、调查未结', () => {
+    const s = playAll();
+    expect(s.finished).toBe(true);
+    expect(hasFlag(s, 'chapter4-done')).toBe(true);
+    expect(hasFlag(s, 'receipt-pending')).toBe(true);
+    const ch4 = s.log.filter((l) => l.node.startsWith('C04-')).map((l) => l.text).join('\n');
+    expect(ch4).toContain('固定配给手续仍在办理中');
+    expect(ch4).toContain('回执仍未补齐');
+    // 不给调查下结论、不替冯师傅表态、不给灰灰升格
+    expect(ch4).not.toMatch(/无罪|已结案|不再追究/);
+    expect(ch4).toMatch(/最终文书仍需完成程序/);
+    expect(ch4).toMatch(/未找到主人|轮班照料|物资站轮班/);
+    expect(s.log.some((l) => l.node.startsWith('C04-') && l.type === 'uncertain')).toBe(true);
+  });
+
+  it('"收到通知不是收到东西"：转录签名被如实记为不算核过', () => {
+    const s = playAll();
+    const grid = s.log.filter((l) => l.node === 'C04-05').map((l) => l.text).join('\n');
+    expect(grid).toContain('这不算核过');
+    expect(grid).toContain('复印件交留守同事');
+    const pages = NODES.find((n) => n.id === 'C04-05')!.pages.map((p) => p.text).join('\n');
+    expect(pages).toContain('收到通知，不是收到东西');
+    expect(pages).toContain('又排上了一串等着登记的人'); // 第一幕不收在一个句号上
+  });
+
+  it('v3 存档迁移到 v4：第三章打完的老档接着进第四章', () => {
+    const upTo = NODES.filter((n) => !n.id.startsWith('C04-')).map((n) => n.id);
+    const legacyV3 = JSON.stringify({
+      version: 3,
+      completed: upTo,
+      choices: {},
+      log: [],
+      flags: ['chapter3-done'],
+      itemJournal: [{ node: 'init', add: ['gloves', 'biscuit', 'vest'], remove: [] }],
+      player: { x: -0.5, z: 3.2 },
+      scene: 'obsroom',
+      finished: true
+    });
+    const restored = parseSave(legacyV3);
+    expect(restored.recovered).toBe(false);
+    expect(restored.state.version).toBe(SAVE_VERSION);
+    expect(restored.state.finished).toBe(false); // 新增章节后不再算"通关"
+    expect(currentNode(restored.state)?.id).toBe('C04-00');
   });
 });
 

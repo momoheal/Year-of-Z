@@ -372,7 +372,7 @@ function refreshTaskCard(): void {
     $('task-title').textContent = `${node.id} · ${node.title}`;
     $('task-objective').textContent = node.objective;
   } else {
-    $('task-title').textContent = '第一章 · 完';
+    $('task-title').textContent = '第一幕 · 完';
     $('task-objective').textContent = '可查看日志、重玩本章或进入工坊试作。';
   }
   const done = $('task-done');
@@ -601,13 +601,13 @@ function armNewGame(): void {
 }
 
 /**
- * 试玩入口：把一、二章按默认选择补全，直接从第三章开始（`?jump=fight` 则直接进厨房开打）。
+ * 试玩入口：把前面几章按默认选择补全，直接从指定节点开始
+ * （`?jump=c3` / `?jump=fight` / `?jump=c4`）。
  * 只用于试玩与回归，不改变正式流程：补全的进度与正常通关写入的是同一套存档结构。
  */
-function jumpToChapter3(toFight: boolean): void {
+function jumpToNode(stopAt: string, tip: string): void {
   localStorage.removeItem(SAVE_KEY);
   state = createNewState();
-  const stopAt = toFight ? 'C03-03' : 'C03-00';
   for (const n of NODES) {
     if (n.id === stopAt) break;
     const r = completeNode(state, n.id, n.choices?.find((c) => !c.rejected)?.id);
@@ -617,8 +617,14 @@ function jumpToChapter3(toFight: boolean): void {
   const spawn = SPAWNS[state.scene];
   state.player = { x: spawn.x, z: spawn.z };
   startGame(true);
-  toast(toFight ? '试玩：直接进入东街厨房的那一刻。' : '试玩：第三章开始，一、二章已按默认选择补全。', 4200);
+  toast(tip, 4200);
 }
+
+const JUMPS: Record<string, { node: string; tip: string }> = {
+  c3: { node: 'C03-00', tip: '试玩：第三章开始，一、二章已按默认选择补全。' },
+  fight: { node: 'C03-03', tip: '试玩：直接进入东街厨房的那一刻。' },
+  c4: { node: 'C04-00', tip: '试玩：第四章《回执》开始，前三章已按默认选择补全。' }
+};
 
 function startGame(fresh: boolean): void {
   $('title-screen').classList.add('hidden');
@@ -1175,7 +1181,12 @@ function bindUI(): void {
   $('btn-continue').addEventListener('click', () => { audio.unlock(); startGame(false); });
   $('btn-jump-ch3').addEventListener('click', () => {
     audio.unlock();
-    jumpToChapter3(new URLSearchParams(location.search).get('jump') === 'fight');
+    const j = JUMPS[new URLSearchParams(location.search).get('jump') ?? ''] ?? JUMPS.c3;
+    jumpToNode(j.node, j.tip);
+  });
+  $('btn-jump-ch4').addEventListener('click', () => {
+    audio.unlock();
+    jumpToNode(JUMPS.c4.node, JUMPS.c4.tip);
   });
   $('btn-webgl-retry').addEventListener('click', () => location.reload());
   $('taskcard').addEventListener('click', () => {
@@ -1241,7 +1252,7 @@ function installE2EHooks(): void {
 
 function boot(): void {
   bootTitle();
-  // ?jump=c3 / ?jump=fight：试玩直达（见 jumpToChapter3）
+  // ?jump=c3 / ?jump=fight / ?jump=c4：试玩直达（见 jumpToNode）
   const jump = new URLSearchParams(location.search).get('jump');
   initToolbar();
   initSettings();
@@ -1262,7 +1273,8 @@ function boot(): void {
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
   window.addEventListener('keydown', () => audio.unlock(), { once: true });
   if (new URLSearchParams(location.search).get('e2e') === '1') installE2EHooks();
-  if (jump === 'c3' || jump === 'fight') jumpToChapter3(jump === 'fight');
+  const jumpDef = jump ? JUMPS[jump] : undefined;
+  if (jumpDef) jumpToNode(jumpDef.node, jumpDef.tip);
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }
 
