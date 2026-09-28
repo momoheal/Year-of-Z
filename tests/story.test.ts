@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SCENE_BOUNDS, SPAWNS } from '../src/mapdata';
+import { HOTSPOTS, SCENE_BOUNDS, SPAWNS } from '../src/mapdata';
 import {
   canInteract,
   ITEMS,
@@ -297,6 +297,57 @@ describe('第三章 · 今天不煮了（遭遇战章）', () => {
     // 本章不揭示自愈，也不给冯师傅的暴露结果下结论
     expect(ch3).not.toMatch(/自愈|痊愈|不会感染|已排除感染/);
     expect(s.log.some((l) => l.node.startsWith('C03-') && l.type === 'uncertain')).toBe(true);
+  });
+});
+
+describe('文本节奏与环境热点（对话面板可读性）', () => {
+  const allPages = NODES.flatMap((n) => [
+    ...n.pages.map((p) => ({ node: n.id, ...p })),
+    ...(n.choices ?? []).flatMap((c) => c.pages.map((p) => ({ node: n.id, ...p })))
+  ]);
+
+  it('单页不超过一屏：叙述 ≤ 130 字，对白 ≤ 45 字；第四章按新标准 ≤ 95 字', () => {
+    for (const p of allPages) {
+      const limit = p.speaker ? 45 : 130;
+      expect(`${p.node}:${p.text.length}<=${limit}`).toBe(`${p.node}:${Math.min(p.text.length, limit)}<=${limit}`);
+      if (p.node.startsWith('C04-') && !p.speaker) {
+        expect(`${p.node}:${p.text.length}<=95`).toBe(`${p.node}:${Math.min(p.text.length, 95)}<=95`);
+      }
+    }
+  });
+
+  it('每个节点都有对白或明确动作，不是整段旁白堆着', () => {
+    for (const n of NODES) {
+      expect(n.pages.length).toBeGreaterThan(0);
+      expect(n.objective.length).toBeLessThanOrEqual(40);
+      expect(n.interactLabel.length).toBeLessThanOrEqual(10);
+    }
+    // 第四章每个节点至少有一句带说话人的台词（全章无战斗，节奏靠对话带）
+    for (const n of NODES.filter((x) => x.id.startsWith('C04-'))) {
+      const lines = [...n.pages, ...(n.choices ?? []).flatMap((c) => c.pages)].filter((p) => p.speaker);
+      expect(`${n.id}:${lines.length > 0}`).toBe(`${n.id}:true`);
+    }
+  });
+
+  it('环境热点：坐标落在所属场景内，且是只读回声（无物品/日志字段）', () => {
+    for (const h of HOTSPOTS) {
+      const b = SCENE_BOUNDS[h.scene];
+      expect(b).toBeTruthy();
+      expect(h.x).toBeGreaterThanOrEqual(b.minX);
+      expect(h.x).toBeLessThanOrEqual(b.maxX);
+      expect(h.z).toBeGreaterThanOrEqual(b.minZ);
+      expect(h.z).toBeLessThanOrEqual(b.maxZ);
+      expect(h.pages.length).toBeGreaterThan(0);
+      expect(Object.keys(h)).not.toContain('effects');
+      for (const p of h.pages) expect(p.text.length).toBeLessThanOrEqual(120);
+    }
+    // 每个有剧情的场景都至少有一处可注视的东西
+    const scenes = new Set(NODES.map((n) => n.scene));
+    const withHot = new Set(HOTSPOTS.map((h) => h.scene));
+    for (const sc of scenes) {
+      if (sc === 'quarantine' || sc === 'kitchen') continue; // 这两处由节点本身的密度撑住
+      expect(`${sc}:${withHot.has(sc)}`).toBe(`${sc}:true`);
+    }
   });
 });
 

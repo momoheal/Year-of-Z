@@ -292,6 +292,115 @@ export const HOTSPOTS: HotspotDef[] = [
       { text: '灰灰压着你留在笼门边的布袋。名字叫到第三声，尾巴先动了。照护人说，先找主人，找不到，你来认。' }
     ]
   },
+  // ---- 第二—四章：正式建景之后补上的"注视"点（只读回声，不写新事实） ----
+  {
+    id: 'hot-yard-board',
+    scene: 'yard', x: -6.2, z: 2.2, label: '看看宣传栏',
+    pages: [
+      { text: '这周的配送安排压在上周的上面，边角卷起来。两张纸的日期之间差着四天。' },
+      { text: '有人用圆珠笔在空白处补了一行房号，字比印刷体大。' }
+    ]
+  },
+  {
+    id: 'hot-yard-cart',
+    scene: 'yard', x: 0, z: 6, label: '看看板车',
+    exceptNodes: ['C02-00'],
+    pages: [
+      { text: '车板中间压出一道浅槽。轮轴上缠着新换的胶布——上一趟是谁修的，没人记。' }
+    ]
+  },
+  {
+    id: 'hot-road-water',
+    scene: 'road', x: 6, z: -2.9, label: '看看积水',
+    pages: [
+      { text: '水面浮着一层油光，底下是没冲走的碎玻璃。桥洞那头的光被切成一条。' },
+      { text: '有人踩着两块砖过去，砖上的鞋印已经干了。' }
+    ]
+  },
+  {
+    id: 'hot-road-post',
+    scene: 'road', x: 1.2, z: 2.6, label: '看看岗亭',
+    pages: [
+      { text: '玻璃上贴着通行时段，最底下一行被撕掉半张。登记本摊在桌上，最新一页只有三行。' }
+    ]
+  },
+  {
+    id: 'hot-pump-sand',
+    scene: 'pump', x: -3.4, z: 8, label: '看看沙袋',
+    pages: [
+      { text: '沙袋摞得不高，刚够挡住便道口。最上面一只被划破过，又用塑料条捆了回去。' }
+    ]
+  },
+  {
+    id: 'hot-liuanli-scale',
+    scene: 'liuanli', x: -1.6, z: 7.6, label: '看看地秤',
+    pages: [
+      { text: '秤盘边沿有一圈米粒压出的白印。记录板上今天只写了两笔，后面空着。' }
+    ]
+  },
+  {
+    id: 'hot-canteen-notice',
+    scene: 'canteen', x: -5.0, z: -6.6, label: '看看供餐须知',
+    pages: [
+      { text: '"一人一份"下面，有人补了一行小字：家里有下不了床的，报房号。' },
+      { text: '纸角被摸得发毛。' }
+    ]
+  },
+  {
+    id: 'hot-dongjie-ev',
+    scene: 'dongjie', x: 4.6, z: -0.6, label: '看看筐里的纸牌',
+    pages: [
+      { text: '硬纸牌上写着几户人的房号和忌口，字写得很大，像怕骑到楼下看不清。' },
+      { text: '一角被雨打软了，有个房号看不清。他没有猜。' }
+    ]
+  },
+  {
+    id: 'hot-obsroom-screen',
+    scene: 'obsroom', x: 0.5, z: -3.2, label: '看看投影幕',
+    pages: [
+      { text: '幕布收了一半，卡在那儿。白布上有一块旧水渍，形状像一张没填完的表。' }
+    ]
+  },
+  {
+    id: 'hot-home-records',
+    scene: 'home', x: -1.6, z: -1.6, label: '看看桌上的病历',
+    pages: [
+      { text: '病历按日期排好，最上面一本夹着接送名单：谁坐前排，谁要人扶。' },
+      { text: '边上是药盒。今天的格子已经空了。' }
+    ]
+  },
+  {
+    id: 'hot-repair-rack',
+    scene: 'repair', x: 4.6, z: -2.4, label: '看看报废架',
+    pages: [
+      { text: '每根料上都挂着编号牌，"可拆"两个字盖了章。' },
+      { text: '账上有新料，架子上没有。这里的东西，是别人用坏了才留下的。' }
+    ]
+  },
+  {
+    id: 'hot-waterfix-slab',
+    scene: 'waterfix', x: 2.0, z: -1.8, label: '看看空着的工位',
+    pages: [
+      { text: '地上四个固定孔还在，孔边有一圈没擦干净的印子。' },
+      { text: '这一格该写什么，他们决定先空着。' }
+    ]
+  },
+  {
+    id: 'hot-grid-map',
+    scene: 'gridoffice', x: 2.4, z: -3.2, label: '看看片区图',
+    pages: [
+      { text: '整片宿舍被一支红笔框起来，框线画得很用力，纸背都起了毛。' },
+      { text: '框里没有写人名。' }
+    ]
+  },
+  {
+    id: 'hot-trackside-boxes',
+    scene: 'trackside', x: 4.4, z: 0.6, label: '看看码好的箱子',
+    pages: [
+      { text: '箱侧的批号里有他认得的那一串。空罐是他从园区清出去的，回来时装着豆子。' },
+      { text: '验收章盖在封条上，边缘有点歪。' }
+    ]
+  },
   {
     id: 'hot-notice',
     scene: 'gate', x: -4.4, z: -2.5, label: '看看通知栏',

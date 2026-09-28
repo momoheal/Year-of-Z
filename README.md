@@ -49,7 +49,7 @@ npm run dev        # 开发服务器 → http://localhost:5173
 | `npm run dev` | 开发服务器（已允许外部主机访问，兼容沙箱预览） |
 | `npm run build` | 类型检查 + 生产构建到 `dist/` |
 | `npm run preview` | 本地预览生产构建 |
-| `npm test` | vitest：40 个用例（叙事内核 25 + 遭遇战内核 15） |
+| `npm test` | vitest：43 个用例（叙事内核 28 + 遭遇战内核 15） |
 | `npm run verify` | **Playwright 运行时验收**（需先 `npx playwright install chromium`；走完 12 节点关键流程并输出 5 张截图到 `shots/`） |
 | `npm run pack` | 构建并打包 `dist/` → `release/yoz-*.tar.gz`（跨平台，纯 Node 实现） |
 
@@ -111,7 +111,7 @@ TypeScript · Vite 5 · three.js 0.169 · cannon-es · lucide（图标）· vite
 
 ## ⚠️ 验收状态（如实记录）
 
-自动化验证（`tsc` / `vitest` 40/40 / `vite build`）全绿。`scripts/verify.mjs` 已覆盖第三、四章：
+自动化验证（`tsc` / `vitest` 43/43 / `vite build`）全绿。`scripts/verify.mjs` 已覆盖第三、四章：
 六节点对话流（`?jump=c3`，断言「咬伤 → 袭击」更正与二十二人名单）、厨房遭遇战整场
 （拿椅子 → 椅子散架 → 拿刀 → 挡 → 挥 → 进 C03-04）以及失败重来路径（`?jump=fight`）；
 第四章六节点对话流（`?jump=c4`，断言两处被退回的写法、第二行留白、"这不算核过"与结尾画面）；

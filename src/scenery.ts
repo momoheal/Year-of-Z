@@ -355,6 +355,16 @@ function buildObsroom(g: THREE.Group, ctx: SceneryCtx): void {
   box(g, 0.44, 0.5, 0.06, C.wood, 3.1, 0.72, -1.2);
   box(g, 0.44, 0.06, 0.44, C.wood, 0.3, 0.46, -1.2);
   box(g, 0.44, 0.5, 0.06, C.wood, 0.1, 0.72, -1.2);
+  // 折叠桌：名单、续餐材料与那个笔记本都摊在这里（C03-05 / C04-01 的交互点）
+  box(g, 1.2, 0.08, 0.7, mat(0xb9ae93), -2.4, 0.74, 2.2);
+  for (const [lx, lz] of [[0.5, 0.28], [-0.5, 0.28], [0.5, -0.28], [-0.5, -0.28]] as const) {
+    box(g, 0.05, 0.74, 0.05, C.metalDark, -2.4 + lx, 0.37, 2.2 + lz);
+  }
+  textBoard(g, 0.42, 0.55, paperTexture('配送名单', 5), -2.6, 0.79, 2.2).rotation.x = -Math.PI / 2;
+  box(g, 0.3, 0.04, 0.22, mat(0x6d6a5c), -2.0, 0.78, 2.28);     // 合着的笔记本
+  cyl(g, 0.05, 0.1, mat(0xcfd3cc), -2.0, 0.81, 1.95);           // 半杯水
+  aoPatch(g, 1.8, 1.4, -2.4, 2.2, 0.35);
+
   // 走廊侧的门与窗（夜里推餐车的声音从这边过）
   box(g, 1.4, 2.1, 0.1, mat(0x7c7a6e), 0.5, 1.05, 4.9).castShadow = false;
   box(g, 0.5, 0.5, 0.06, mat(0xb9c4c0, { emissive: 0xb9c4c0, emissiveIntensity: 0.25 }), 0.5, 1.7, 4.84).castShadow = false;
@@ -379,12 +389,12 @@ function buildHome(g: THREE.Group, ctx: SceneryCtx): void {
   box(g, 0.6, 0.06, 0.12, C.wood, 0.9, 1.7, 4.36);
   box(g, 0.3, 0.5, 0.1, mat(0x6d7a6a), 0.9, 1.4, 4.3);
   // 那把递过来的椅子（正对门口）
-  box(g, 0.46, 0.06, 0.46, C.wood, 0.9, 0.46, 1.4);
-  box(g, 0.46, 0.52, 0.06, C.wood, 0.9, 0.74, 1.6);
+  box(g, 0.46, 0.06, 0.46, C.wood, 0.8, 0.46, -0.9);
+  box(g, 0.46, 0.52, 0.06, C.wood, 0.8, 0.74, -0.68);
   for (const [lx, lz] of [[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]] as const) {
-    box(g, 0.05, 0.46, 0.05, C.metalDark, 0.9 + lx, 0.23, 1.4 + lz);
+    box(g, 0.05, 0.46, 0.05, C.metalDark, 0.8 + lx, 0.23, -0.9 + lz);
   }
-  aoPatch(g, 1.2, 1.2, 0.9, 1.4, 0.4);
+  aoPatch(g, 1.2, 1.2, 0.8, -0.9, 0.4);
   // 桌子：按日期排好的病历、药盒、座机
   box(g, 1.7, 0.1, 0.95, C.wood, -1.6, 0.76, -1.6);
   for (const [lx, lz] of [[0.75, 0.38], [-0.75, 0.38], [0.75, -0.38], [-0.75, -0.38]] as const) {
@@ -404,8 +414,8 @@ function buildHome(g: THREE.Group, ctx: SceneryCtx): void {
   cyl(g, 0.22, 0.05, mat(0xe2ded0), 3.4, 2.1, -3.84, { rx: Math.PI / 2 });
   // 母亲：在桌边打电话核对下一轮接送
   const mom = makePerson({ coat: 0x8a6f72, pants: 0x4a4d50, skin: 0xd6b79a, scale: 0.96 });
-  mom.position.set(-1.6, 0, -0.6);
-  mom.rotation.y = 0.35;
+  mom.position.set(-1.2, 0, -0.9);
+  mom.rotation.y = 0.9;
   g.add(mom);
   dust(g, ctx, 26, { x: [-4, 4], y: [0.4, 2.4], z: [-3, 4] });
 }
@@ -657,12 +667,13 @@ export const SCENERY_BLOCKERS: Partial<Record<SceneId, WallRect[]>> = {
   ],
   obsroom: [
     { x: -3.6, z: 0.6, hx: 0.55, hz: 1.1, h: 0.8 },
+    { x: -2.4, z: 2.2, hx: 0.6, hz: 0.35, h: 0.75 },
     { x: 1.6, z: -1.2, hx: 0.9, hz: 0.5, h: 0.8 },
     { x: 5.2, z: 2.4, hx: 0.35, hz: 0.25, h: 0.9 }
   ],
   home: [
     { x: -1.6, z: -1.6, hx: 0.85, hz: 0.5, h: 0.8 },
-    { x: 0.9, z: 1.4, hx: 0.25, hz: 0.25, h: 0.9 }
+    { x: 0.8, z: -0.9, hx: 0.25, hz: 0.25, h: 0.9 }
   ],
   repair: [
     { x: -4.6, z: 3.0, hx: 1.4, hz: 1.2, h: 2.0 },
