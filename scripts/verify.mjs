@@ -258,17 +258,23 @@ try {
   ok(await nodeId(c4) === 'C04-01', 'C04-00 完成 → C04-01（第四天）');
 
   await playNode(c4);                                   // C04-01 第四天
+  await c4.waitForTimeout(1200);
   ok(await nodeId(c4) === 'C04-02', 'C04-01 完成 → C04-02');
-  await playNode(c4, '名单交给送饭的人');               // C04-02 回家不是好了
   ok(await c4.evaluate(() => window.__yoz.scene()) === 'home', '场景切到家里');
+  await playNode(c4, '名单交给送饭的人');               // C04-02 回家不是好了
+  await c4.waitForTimeout(1200);
   ok(await nodeId(c4) === 'C04-03', 'C04-02 完成 → C04-03');
-  await playNode(c4);                                   // C04-03 修好的轮子
   ok(await c4.evaluate(() => window.__yoz.scene()) === 'repair', '场景切到工坊');
   await c4.screenshot({ path: `${SHOT_DIR}/10-repair.png` });
+  await playNode(c4);                                   // C04-03 修好的轮子
+  await c4.waitForTimeout(1200);
   ok(await nodeId(c4) === 'C04-04', 'C04-03 完成 → C04-04');
+  ok(await c4.evaluate(() => window.__yoz.scene()) === 'waterfix', '场景切到净水维修点');
   await playNode(c4, '第二行留白');                     // C04-04 两行记录
+  await c4.waitForTimeout(1200);
   ok(await nodeId(c4) === 'C04-05', 'C04-04 完成 → C04-05');
   await playNode(c4);                                   // C04-05 也有他那一户
+  await c4.waitForTimeout(1200);
   ok(await c4.evaluate(() => window.__yoz.scene()) === 'trackside', '收尾场景切到铁路边的路口');
 
   const log4 = await c4.evaluate(() => window.__yoz.logText());
