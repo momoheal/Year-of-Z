@@ -300,6 +300,19 @@ describe('第三章 · 今天不煮了（遭遇战章）', () => {
   });
 });
 
+describe('场景可达性（全章不变量）', () => {
+  it('相邻节点换场景时，前一个节点必须把 toScene 指到下一个节点所在场景', () => {
+    for (let i = 0; i < NODES.length - 1; i++) {
+      const cur = NODES[i];
+      const next = NODES[i + 1];
+      if (next.scene === cur.scene) continue;
+      // 否则玩家会停在上一个场景里，永远走不到下一个目标点
+      expect(`${cur.id}→${next.id}:${cur.effects.toScene ?? '无'}`)
+        .toBe(`${cur.id}→${next.id}:${next.scene}`);
+    }
+  });
+});
+
 describe('第四章 · 回执（第一幕收束）', () => {
   it('六个节点、无战斗、无武器；场景与出生点/外框数据齐备', () => {
     const ch4 = NODES.filter((n) => n.id.startsWith('C04-'));

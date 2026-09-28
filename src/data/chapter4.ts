@@ -142,6 +142,7 @@ export const CH4_NODES: Ch4Node[] = [
       addItems: ['day4-note'],
       flags: ['dongjie-day4'],
       worldEvent: 'day-four',
+      toScene: 'home',
       log: [
         { type: 'fact', text: '东街配送由短期方案续上：按每日核实的实际人数结算，固定配给手续仍在办理中。' },
         { type: 'uncertain', text: '短期配送能续到哪一天，没有期限；核实中的姓名仍未全部落到回执上。' }
@@ -189,7 +190,7 @@ export const CH4_NODES: Ch4Node[] = [
       addItems: ['psy-card'],
       flags: ['home-return', 'psy-followup'],
       worldEvent: 'back-home',
-      toScene: 'home',
+      toScene: 'repair',
       log: [
         { type: 'fact', text: '医护在复查评估后允许回家，要求继续监测与复诊；心理支持已建立随访联系。' },
         { type: 'fact', text: '调查人员告知：现有证言与现场情况支持遭袭时的防卫陈述，暂不采取限制措施，最终文书仍需完成程序。' },
@@ -217,7 +218,7 @@ export const CH4_NODES: Ch4Node[] = [
       addItems: ['dog-log', 'part-note'],
       flags: ['cart-repaired', 'dog-shared-care'],
       worldEvent: 'cart-fixed',
-      toScene: 'repair',
+      toScene: 'waterfix',
       log: [
         { type: 'fact', text: '送餐推车以登记可拆的报废件修复，可正常推行；所需新料在账上而不在架上，调拨单标注"集中加工"。' },
         { type: 'fact', text: '灰灰仍由物资站轮班照料，未找到主人；许晨承担约定份额，短程外出须视状态与目的地，不得进厂区、病区。' },
@@ -262,7 +263,7 @@ export const CH4_NODES: Ch4Node[] = [
     effects: {
       addItems: ['trace-sheet'],
       flags: ['trace-two-lines'],
-      toScene: 'waterfix',
+      toScene: 'gridoffice',
       log: [
         { type: 'fact', text: '一批钢料确认用于净水设备维修点，现场见到修复后的支架。' },
         { type: 'uncertain', text: '另一批以同一用途开走，缺加工回执，去向未核实；记录留白，不作挪用结论。' }
