@@ -330,6 +330,14 @@ try {
   await c5.waitForTimeout(1400);
   ok(await nodeId(c5) === 'C05-04', 'C05-03 完成 → C05-04');
   ok(await c5.evaluate(() => window.__yoz.scene()) === 'safezone', '场景切到职工安全区');
+  // 同行表现：梁在场、跟在身后一个说话距离，不贴脸也不掉队
+  const comp0 = await c5.evaluate(() => window.__yoz.companion());
+  ok(comp0.visible === true, '梁医生作为同行者出现在路上的场景里');
+  await c5.evaluate(() => window.__yoz.teleport(3.2, 2.2));
+  await c5.waitForTimeout(1600);
+  const comp1 = await c5.evaluate(() => ({ c: window.__yoz.companion(), p: window.__yoz.playerPos() }));
+  const gap = Math.hypot(comp1.c.x - comp1.p.x, comp1.c.z - comp1.p.z);
+  ok(gap > 0.8 && gap < 3.4, `同行者跟上来并停在说话距离（${gap.toFixed(2)} 米）`);
   await c5.screenshot({ path: `${SHOT_DIR}/14-safezone.png` });
   await playNode(c5);                           // C05-04（无选择：叙述）
   await c5.waitForTimeout(1400);

@@ -416,6 +416,7 @@ function updateTaskGuide(): void {
 
 function openDialog(node: NodeDef): void {
   session = { node, pages: node.pages, idx: 0, phase: 'pages' };
+  world.setCompanionHalt(true);   // 说话的时候同行者站定，转头看着你
   $('dialog').classList.remove('hidden');
   $('interact-hint').classList.add('hidden');
   $('btn-interact-touch').classList.add('hidden');
@@ -424,6 +425,7 @@ function openDialog(node: NodeDef): void {
 
 function closeDialog(): void {
   session = null;
+  world.setCompanionHalt(false);
   $('dialog').classList.add('hidden');
 }
 
@@ -537,6 +539,7 @@ function finalizeDialog(): void {
     sceneTransition(r.toScene);
   }
   // 下一节点若是自动段落或遭遇战，不需要玩家再跑一趟
+  if (!r.toScene) world.setCompanion(state.flags.includes('liang-joined'), state.scene);
   if (!r.finishedNow) setTimeout(() => maybeAutoNode(), r.toScene ? 1500 : 700);
   if (r.finishedNow) {
     setTimeout(() => {
@@ -558,6 +561,7 @@ function sceneTransition(to: SceneId): void {
     const spawn = SPAWNS[to];
     state.player = { x: spawn.x, z: spawn.z };
     world.setScene(to, spawn);
+    world.setCompanion(state.flags.includes('liang-joined'), to, spawn);
     world.setLightMode(state.lightMode, autoLight(state));
     refreshTaskCard();
     saveNow();
@@ -636,6 +640,7 @@ function startGame(fresh: boolean): void {
   }
   const spawn = fresh ? SPAWNS[state.scene] : SPD(state);
   world.setScene(state.scene, spawn);
+  world.setCompanion(state.flags.includes('liang-joined'), state.scene, spawn);
   world.syncFromState(state);
   refreshTaskCard();
   started = true;
@@ -1233,6 +1238,7 @@ function installE2EHooks(): void {
       return true;
     },
     teleport: (x: number, z: number) => { world.setPlayerPos(x, z); },
+    companion: () => world.getCompanion(),
     /** 只切画面（不动剧情状态）：用于逐个场景的建景冒烟测试 */
     showScene: (id: string) => {
       const sid = id as typeof state.scene;

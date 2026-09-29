@@ -12,6 +12,7 @@ import { Body, Box, Sphere, Vec3, World as PhysWorld } from 'cannon-es';
 import type { GameState, LightMode, LightPreset, NodeEffects, SceneId } from './story';
 import { KITCHEN_WALLS, PARK_WALLS, SCENE_BOUNDS } from './mapdata';
 import { SCENERY_BLOCKERS, buildScenery } from './scenery';
+import { createFollower, recallFollower, stepFollower, type FollowState } from './follow';
 import { ARENA, type CombatState } from './combat';
 import {
   C, PALLET, PLAYER_R, WALK_SPEED, RUN_SPEED,
@@ -81,6 +82,14 @@ export class GameWorld {
   private facing = 0;
   private marker = new THREE.Group();
   private markerTarget: { x: number; z: number } | null = null;
+  // 同行者（梁医生）：同行不入队——只跟着走，不交互、不战斗、不替玩家做事
+  private companion = makePerson({ coat: 0xd8dbd6, pants: 0x4a5058, skin: 0xd2b193 });
+  private companionOn = false;
+  private companionHalt = false;
+  private companionState: FollowState = createFollower(0, 0);
+  private companionBob = 0;
+  private companionAmt = 0;
+
   private dog = makeDog();
   private dogMode: 'hidden' | 'idle' | 'follow' | 'shed' = 'hidden';
   private dogVel = new V();
@@ -157,6 +166,8 @@ export class GameWorld {
     blob.position.y = 0.02;
     this.playerGroup.add(blob);
     this.scene.add(this.dog);
+    this.companion.visible = false;
+    this.scene.add(this.companion);
     this.dog.visible = false;
     this.initGuide();
     this.buildSet('park');
@@ -311,6 +322,33 @@ export class GameWorld {
     return g;
   }
 
+  /**
+   * 同行者开关：只在"路上"的场景出现（梁自己的值班室里由建景摆静态人物）。
+   * on=false 时直接隐藏，不做任何跟随计算。
+   */
+  setCompanion(on: boolean, scene: SceneId, spawn?: { x: number; z: number }): void {
+    const roaming: SceneId[] = ['safezone', 'checkgate', 'recvstation'];
+    const show = on && roaming.includes(scene);
+    this.companionOn = show;
+    this.companion.visible = show;
+    if (!show) return;
+    const px = spawn ? spawn.x : this.playerGroup.position.x;
+    const pz = spawn ? spawn.z : this.playerGroup.position.z;
+    // 出场就站在半步之后，不要从场外跑进来
+    this.companionState = createFollower(px - 1.2, pz + 0.9, Math.PI);
+    this.companion.position.set(this.companionState.x, 0, this.companionState.z);
+  }
+
+  /** 对话/过场时站定（人不会在你说话时绕着你转） */
+  setCompanionHalt(on: boolean): void {
+    this.companionHalt = on;
+  }
+
+  /** 供 e2e 与调试读取 */
+  getCompanion(): { visible: boolean; x: number; z: number } {
+    return { visible: this.companionOn, x: this.companionState.x, z: this.companionState.z };
+  }
+
   /** 切换场景并重置物理；set 由 buildSet 记住首次构建 */
   setScene(id: SceneId, spawn: { x: number; z: number }): void {
     this.dogVel.set(0, 0, 0);
@@ -331,6 +369,8 @@ export class GameWorld {
     this.camFocus.set(spawn.x, 0, spawn.z); // 切场景时镜头直接落位，不跨场景拖尾
     this.camera.position.set(spawn.x + this.camOffset.x, this.camOffset.y, spawn.z + this.camOffset.z);
     this.camera.lookAt(spawn.x, 1, spawn.z);
+    if (this.companionOn) this.setCompanion(true, id, spawn);
+    else this.companion.visible = false;
     // 灰灰：园区与物资站之外，第四章的工坊与路口也带着它（doc/11）
     this.dog.visible = id === 'park' || id === 'depot' || id === 'repair' || id === 'trackside';
     if (id !== 'kitchen' && this.foe) this.foe.visible = false;
@@ -1686,6 +1726,7 @@ export class GameWorld {
 
     this.animatePlayer(dt, len, running);
     this.updateDog(dt);
+    this.updateCompanion(dt);
     this.updateAmbient(dt);
     this.updateGuideTrail();
     this.updateLight(dt);
@@ -1741,6 +1782,35 @@ export class GameWorld {
       // 头反向微抬，视线保持前看
       head.rotation.x = -(running ? 0.05 : 0.02) * this.bobAmt + Math.sin(this.bobT * 0.5) * 0.02 * this.bobAmt;
     }
+  }
+
+  /** 同行者跟随：位移由 follow.ts 的纯逻辑算，这里只负责朝向、步态与落位 */
+  private updateCompanion(dt: number): void {
+    if (!this.companionOn) return;
+    const target = { x: this.playerGroup.position.x, z: this.playerGroup.position.z };
+    recallFollower(this.companionState, target);
+    stepFollower(this.companionState, target, dt, { halted: this.companionHalt });
+    const st = this.companionState;
+    this.companion.position.set(st.x, 0, st.z);
+    this.companion.rotation.y = st.facing;
+
+    // 步态：与玩家同一套"半步 0.733 米"的相位，走得慢一些
+    const legL = this.companion.userData.legL as THREE.Group | undefined;
+    const legR = this.companion.userData.legR as THREE.Group | undefined;
+    const armL = this.companion.userData.armL as THREE.Group | undefined;
+    const armR = this.companion.userData.armR as THREE.Group | undefined;
+    if (st.moved > 0.0005) {
+      this.companionBob += (st.moved / (2.2 / 3)) * Math.PI;
+      this.companionAmt += (1 - this.companionAmt) * Math.min(1, dt * 9);
+    } else {
+      this.companionAmt *= Math.max(0, 1 - dt * 7);
+    }
+    const swing = Math.sin(this.companionBob) * 0.5 * this.companionAmt;
+    if (legL) legL.rotation.x = swing;
+    if (legR) legR.rotation.x = -swing;
+    if (armL) armL.rotation.x = -swing * 0.6;
+    if (armR) armR.rotation.x = swing * 0.6;
+    this.companion.position.y = Math.abs(Math.sin(this.companionBob)) * 0.04 * this.companionAmt;
   }
 
   private updateDog(dt: number): void {

@@ -717,10 +717,7 @@ function buildSafezone(g: THREE.Group, ctx: SceneryCtx): void {
   van.position.set(3.6, 0, 1.8);
   van.rotation.y = -1.5;
   g.add(van);
-  const liang = makePerson({ coat: 0xd8dbd6, pants: 0x4a5058, skin: 0xd2b193 });
-  liang.position.set(1.2, 0, -0.9);
-  liang.rotation.y = Math.PI - 0.3;
-  g.add(liang);
+  // 梁医生不在这里摆静态人物：C05-03 之后他是跟随的同行者（world.ts setCompanion）
   dust(g, ctx, 30, { x: [-5, 5], y: [0.3, 2.6], z: [-3, 3] });
 }
 
@@ -743,10 +740,7 @@ function buildCheckgate(g: THREE.Group, ctx: SceneryCtx): void {
   van.position.set(2.4, 0, 2.6);
   van.rotation.y = 0.05;
   g.add(van);
-  const liang = makePerson({ coat: 0xd8dbd6, pants: 0x4a5058, skin: 0xd2b193 });
-  liang.position.set(0.4, 0, 1.4);
-  liang.rotation.y = -1.9;
-  g.add(liang);
+  // 同上：岗亭这一段梁是跟着来的，不在建景里摆
   const zhao = makePerson({ coat: 0x6b6f62, pants: 0x42474c });
   zhao.position.set(-0.6, 0, 2.4);
   zhao.rotation.y = -1.2;
