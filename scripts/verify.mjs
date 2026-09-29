@@ -339,13 +339,23 @@ try {
     const c = window.__yoz.companion(); const p = window.__yoz.playerPos();
     return Math.hypot(c.x - p.x, c.z - p.z);
   });
-  await c5.waitForTimeout(3000);
-  const near1 = await c5.evaluate(() => {
+  // CI 上帧率低（软件渲染），跟随按帧推进会慢很多：轮询等它走到说话距离
+  let near1 = near0;
+  for (let i = 0; i < 40 && near1 > 2.2; i++) {
+    await c5.waitForTimeout(500);
+    near1 = await c5.evaluate(() => {
+      const c = window.__yoz.companion(); const p = window.__yoz.playerPos();
+      return Math.hypot(c.x - p.x, c.z - p.z);
+    });
+  }
+  ok(near1 < near0 - 0.8, `同行者会追上来（${near0.toFixed(2)} → ${near1.toFixed(2)} 米）`);
+  ok(near1 > 0.6 && near1 <= 2.2, `同行者停在说话距离、不贴脸（${near1.toFixed(2)} 米）`);
+  await c5.waitForTimeout(1500);
+  const near2 = await c5.evaluate(() => {
     const c = window.__yoz.companion(); const p = window.__yoz.playerPos();
     return Math.hypot(c.x - p.x, c.z - p.z);
   });
-  ok(near1 < near0 - 0.8, `同行者会追上来（${near0.toFixed(2)} → ${near1.toFixed(2)} 米）`);
-  ok(near1 > 0.6 && near1 < 4.0, `同行者停在说话距离、不贴脸（${near1.toFixed(2)} 米）`);
+  ok(near2 > 0.6, '站定之后不会继续往玩家身上贴');
   await c5.screenshot({ path: `${SHOT_DIR}/14-safezone.png` });
   await playNode(c5);                           // C05-04（无选择：叙述）
   await c5.waitForTimeout(1400);
