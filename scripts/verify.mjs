@@ -275,7 +275,8 @@ try {
   ok(await nodeId(c4) === 'C04-05', 'C04-04 完成 → C04-05');
   await playNode(c4);                                   // C04-05 也有他那一户
   await c4.waitForTimeout(1200);
-  ok(await c4.evaluate(() => window.__yoz.scene()) === 'trackside', '收尾场景切到铁路边的路口');
+  ok(await c4.evaluate(() => window.__yoz.scene()) === 'recvstation',
+    '第一幕收束后直接进第二幕的接收站（幕间转场）');
 
   const log4 = await c4.evaluate(() => window.__yoz.logText());
   ok(log4.includes('无加工回执') && log4.includes('不作挪用结论'), '第二行留白：无回执不写成挪用');
@@ -284,7 +285,7 @@ try {
   ok(!/无罪|已结案/.test(log4), '不替调查下结论');
   const flags4 = await c4.evaluate(() => window.__yoz.flags());
   ok(flags4.includes('chapter4-done'), '第四章完成标记已写入');
-  ok(await c4.locator('#end-screen:visible').count() === 1, '第一幕收束：结尾画面出现');
+  ok(await nodeId(c4) === 'C05-00', '第一幕收束：接着进入第五章 C05-00');
   await c4.screenshot({ path: `${SHOT_DIR}/11-act1-end.png` });
   await c4.close();
 
