@@ -17,7 +17,7 @@
  *   - 赵网格不是反派也不是英雄：他照录过那张"整片宿舍已转移"，也自己承认那不算核过。
  */
 
-import type { ItemDef, NodeDef, NodeEffects } from '../story';
+import type { ItemDef, NodeDef, NodeEffects, SceneId } from '../story';
 
 // ---------------------------------------------------------------- 类型
 
@@ -35,7 +35,8 @@ export type Ch4WorldEvent =
 
 export interface Ch4NodeEffects extends Omit<NodeEffects, 'worldEvent' | 'toScene'> {
   worldEvent?: Ch4WorldEvent;
-  toScene?: Ch4SceneId;
+  /** 幕间转场：最后一个节点要把玩家送进第二幕的第一个场景，故放宽为 SceneId */
+  toScene?: Ch4SceneId | SceneId;
 }
 
 export type Ch4Node = Omit<NodeDef, 'effects' | 'scene'> & {
@@ -340,7 +341,8 @@ export const CH4_NODES: Ch4Node[] = [
       addItems: ['grid-copy'],
       flags: ['chapter4-done', 'receipt-pending'],
       worldEvent: 'train-in',
-      toScene: 'trackside',
+      // 幕间转场：本节点的画面在铁路边（由 C04-04 切过来），结束后直接进第二幕的接收站
+      toScene: 'recvstation',
       log: [
         { type: 'fact', text: '赵网格所在片区口粮因"人口重复申报"被暂扣，扣减数量超过可核实的迁出人数；其按户重算后包含自己一户。' },
         { type: 'fact', text: '东街最早报表"整片宿舍已转移"一栏为赵网格转录上级批次所签，本人说明"这不算核过"；原件留存，复印件交留守同事。' },

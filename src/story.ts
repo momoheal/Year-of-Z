@@ -10,10 +10,11 @@ import { CH1_ITEMS, CH1_NODES } from './data/chapter1';
 import { CH2_ITEMS, CH2_NODES, type Ch2SceneId, type Ch2WorldEvent } from './data/chapter2';
 import { CH3_ITEMS, CH3_NODES, type Ch3SceneId, type Ch3WorldEvent } from './data/chapter3';
 import { CH4_ITEMS, CH4_NODES, type Ch4SceneId, type Ch4WorldEvent } from './data/chapter4';
+import { CH5_ITEMS, CH5_NODES, type Ch5SceneId, type Ch5WorldEvent } from './data/chapter5';
 
 // ---------------------------------------------------------------- 类型
 
-export type SceneId = 'park' | 'depot' | 'quarantine' | 'gate' | Ch2SceneId | Ch3SceneId | Ch4SceneId;
+export type SceneId = 'park' | 'depot' | 'quarantine' | 'gate' | Ch2SceneId | Ch3SceneId | Ch4SceneId | Ch5SceneId;
 export type LightPreset = 'dawn' | 'noon' | 'dusk' | 'night';
 export type LightMode = 'auto' | LightPreset;
 export type LogType = 'fact' | 'uncertain' | 'choice';
@@ -51,7 +52,8 @@ export interface NodeEffects {
     | 'dog-to-shed'
     | Ch2WorldEvent
     | Ch3WorldEvent
-    | Ch4WorldEvent;
+    | Ch4WorldEvent
+    | Ch5WorldEvent;
   /** 完成后切换到的压缩场景 */
   toScene?: SceneId;
 }
@@ -120,14 +122,14 @@ export interface GameState {
 export const SAVE_KEY = 'yoz.chapter1.v1';
 export const WORKSHOP_KEY = 'yoz.workshop.v1';
 /** 存档结构版本；每次新增/变更 GameState 字段就 +1，并在 migrateSave() 里补一级迁移 */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 /** 交互判定距离（米） */
 export const INTERACT_RANGE = 2.6;
 
 // ---------------------------------------------------------------- 物品
 
 /** 全部物品定义：第一章 + 第二章合并（同 id 后者覆盖前者，目前无冲突） */
-export const ITEMS: Record<string, ItemDef> = { ...CH1_ITEMS, ...CH2_ITEMS, ...CH3_ITEMS, ...CH4_ITEMS };
+export const ITEMS: Record<string, ItemDef> = { ...CH1_ITEMS, ...CH2_ITEMS, ...CH3_ITEMS, ...CH4_ITEMS, ...CH5_ITEMS };
 
 /** 初始物品（母亲手套、早餐饼、反光背心）；其他物品由节点派生，避免重复领取 */
 export const INITIAL_ITEMS = ['gloves', 'biscuit', 'vest'];
@@ -136,7 +138,7 @@ export const INITIAL_ITEMS = ['gloves', 'biscuit', 'vest'];
 // 坐标对应 world.ts 的各场景布局；数据本体已按章拆分到 src/data/chapter1.ts、chapter2.ts，
 // 这里只做拼接：存档闸门"严格按定义顺序推进"天然覆盖跨章节的连续序号。
 
-export const NODES: NodeDef[] = [...CH1_NODES, ...CH2_NODES, ...CH3_NODES, ...CH4_NODES];
+export const NODES: NodeDef[] = [...CH1_NODES, ...CH2_NODES, ...CH3_NODES, ...CH4_NODES, ...CH5_NODES];
 
 export const NODE_INDEX: Record<string, number> = Object.fromEntries(NODES.map((n, i) => [n.id, i]));
 
@@ -325,6 +327,8 @@ function migrateSave(raw: Record<string, unknown>): Record<string, unknown> {
   // v3 → v4：第四章《回执》数据接入（新增 5 个场景，无战斗）。GameState 结构未变，
   // 仅推进版本号；第三章打完的老存档读进来后，当前任务自然落到 C04-00。
   if (v < 4) s = { ...s, version: 4 };
+  // v4 → v5：第二幕开篇《签过的纸》接入（4 个新场景，无战斗）。GameState 结构未变。
+  if (v < 5) s = { ...s, version: 5 };
   return s;
 }
 
@@ -356,7 +360,8 @@ export function parseSave(raw: string | null): ParseResult {
   }
   const scenes: SceneId[] = ['park', 'depot', 'quarantine', 'gate', 'yard', 'road', 'pump', 'liuanli', 'canteen',
     'dongjie', 'kitchen', 'obsroom',
-    'home', 'repair', 'waterfix', 'gridoffice', 'trackside'];
+    'home', 'repair', 'waterfix', 'gridoffice', 'trackside',
+    'recvstation', 'medpoint', 'safezone', 'checkgate'];
   const scene = scenes.includes(s.scene as SceneId) ? (s.scene as SceneId) : 'park';
   return {
     state: {

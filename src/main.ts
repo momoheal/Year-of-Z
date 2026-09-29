@@ -372,7 +372,7 @@ function refreshTaskCard(): void {
     $('task-title').textContent = `${node.id} · ${node.title}`;
     $('task-objective').textContent = node.objective;
   } else {
-    $('task-title').textContent = '第一幕 · 完';
+    $('task-title').textContent = '第二幕 · 待续';
     $('task-objective').textContent = '可查看日志、重玩本章或进入工坊试作。';
   }
   const done = $('task-done');
@@ -623,7 +623,8 @@ function jumpToNode(stopAt: string, tip: string): void {
 const JUMPS: Record<string, { node: string; tip: string }> = {
   c3: { node: 'C03-00', tip: '试玩：第三章开始，一、二章已按默认选择补全。' },
   fight: { node: 'C03-03', tip: '试玩：直接进入东街厨房的那一刻。' },
-  c4: { node: 'C04-00', tip: '试玩：第四章《回执》开始，前三章已按默认选择补全。' }
+  c4: { node: 'C04-00', tip: '试玩：第四章《回执》开始，前三章已按默认选择补全。' },
+  c5: { node: 'C05-00', tip: '试玩：第五章《签过的纸》开始，第一幕已按默认选择补全。' }
 };
 
 function startGame(fresh: boolean): void {
@@ -1188,6 +1189,10 @@ function bindUI(): void {
     audio.unlock();
     jumpToNode(JUMPS.c4.node, JUMPS.c4.tip);
   });
+  $('btn-jump-ch5').addEventListener('click', () => {
+    audio.unlock();
+    jumpToNode(JUMPS.c5.node, JUMPS.c5.tip);
+  });
   $('btn-webgl-retry').addEventListener('click', () => location.reload());
   $('taskcard').addEventListener('click', () => {
     if (window.innerWidth <= 720) $('taskcard').classList.toggle('compact');
@@ -1260,7 +1265,7 @@ function installE2EHooks(): void {
 
 function boot(): void {
   bootTitle();
-  // ?jump=c3 / ?jump=fight / ?jump=c4：试玩直达（见 jumpToNode）
+  // ?jump=c3 / ?jump=fight / ?jump=c4 / ?jump=c5：试玩直达（见 jumpToNode）
   const jump = new URLSearchParams(location.search).get('jump');
   initToolbar();
   initSettings();

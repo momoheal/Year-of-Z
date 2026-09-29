@@ -30,7 +30,12 @@ export const SPAWNS: Record<SceneId, { x: number; z: number }> = {
   repair: { x: -2.6, z: 4.2 },   // 物资站工具棚外 → 旁边的工坊
   waterfix: { x: -2.0, z: 3.0 }, // 净水设备维修点院子
   gridoffice: { x: 1.6, z: 3.2 },// 网格员办公室门口
-  trackside: { x: -3.0, z: 4.0 } // 铁路边的路口
+  trackside: { x: -3.0, z: 4.0 }, // 铁路边的路口
+  // 第五章《签过的纸》
+  recvstation: { x: 0, z: 4.2 },  // 接收站：窗口在北，档案柜在西
+  medpoint: { x: 0.4, z: 3.4 },   // 临时医疗点：值班室门内
+  safezone: { x: -2.8, z: 2.6 },  // 职工安全区：挡着桶的那个窗口外
+  checkgate: { x: 0, z: 4.4 }     // 路上的核查岗亭
 };
 
 export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
@@ -49,7 +54,11 @@ export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
   repair: '物资站工具棚 · 旁边的工坊 —— 又过了几天',
   waterfix: '净水设备维修点 —— 查料那天',
   gridoffice: '网格员办公室 —— 第三次见面',
-  trackside: '铁路边 · 卸货的路口 —— 当天'
+  trackside: '铁路边 · 卸货的路口 —— 当天',
+  recvstation: '接收站 · 窗口与档案室 —— 第二幕开始',
+  medpoint: '临时医疗点 —— 药退回来的那天傍晚',
+  safezone: '职工安全区 · 侧窗 —— 路上第一站',
+  checkgate: '核查岗亭 —— 路上第二站'
 };
 
 /** 场景可活动外框（测试校验目标点在界内） */
@@ -73,7 +82,12 @@ export const SCENE_BOUNDS: Record<SceneId, { minX: number; maxX: number; minZ: n
   repair: { minX: -7, maxX: 7, minZ: -5, maxZ: 5.5 },
   waterfix: { minX: -6, maxX: 6, minZ: -5, maxZ: 4.5 },
   gridoffice: { minX: -5, maxX: 5, minZ: -4, maxZ: 4.5 },
-  trackside: { minX: -8, maxX: 8, minZ: -5, maxZ: 5.5 }
+  trackside: { minX: -8, maxX: 8, minZ: -5, maxZ: 5.5 },
+  // 第五章：都是"隔着窗口说话"的小场地
+  recvstation: { minX: -6, maxX: 6, minZ: -4, maxZ: 5 },
+  medpoint: { minX: -5, maxX: 5, minZ: -4, maxZ: 4.5 },
+  safezone: { minX: -6, maxX: 6, minZ: -4, maxZ: 4 },
+  checkgate: { minX: -7, maxX: 7, minZ: -4, maxZ: 5 }
 };
 
 // ---------------------------------------------------------------- 园区静态阻挡（与 world.ts parkPhysics 同步被消费）
@@ -399,6 +413,46 @@ export const HOTSPOTS: HotspotDef[] = [
     pages: [
       { text: '箱侧的批号里有他认得的那一串。空罐是他从园区清出去的，回来时装着豆子。' },
       { text: '验收章盖在封条上，边缘有点歪。' }
+    ]
+  },
+  {
+    id: 'hot-recv-window',
+    scene: 'recvstation', x: 1.8, z: -1.6, label: '看看窗口里的值班表',
+    pages: [
+      { text: '值班表贴在窗内侧。上一行的名字被划掉，新名字写在旁边，没有盖章。' },
+      { text: '划掉和写上，中间隔了十一天。' }
+    ]
+  },
+  {
+    id: 'hot-recv-archive',
+    scene: 'recvstation', x: -4.2, z: 0.9, label: '看看档案柜',
+    pages: [
+      { text: '柜面上按片区贴着标签，最下面一格没有标签，塞得最满。' },
+      { text: '抽屉轨道上有一层新灰：拉出来过很多次，又一直没人整理。' }
+    ]
+  },
+  {
+    id: 'hot-med-beds',
+    scene: 'medpoint', x: -3.2, z: -0.4, label: '看看床尾的交接卡',
+    pages: [
+      { text: '卡片上只写药名、时间和一个手写的箭头：停了几天，从哪天算起。' },
+      { text: '有一张卡的背面写着家属电话，打过三次，都是空号。' }
+    ]
+  },
+  {
+    id: 'hot-safe-bucket',
+    scene: 'safezone', x: 2.2, z: -1.6, label: '看看挡门的桶',
+    pages: [
+      { text: '桶里是沙子，压得很实。挪开一次要两只手，她只挪开了半边。' },
+      { text: '地上有一道弧形的擦痕。搬回去的时候，是照着原来的印子放的。' }
+    ]
+  },
+  {
+    id: 'hot-gate-radio',
+    scene: 'checkgate', x: -2.8, z: -0.8, label: '看看岗亭的对讲机',
+    pages: [
+      { text: '对讲机挂在窗边，键上磨掉了漆。刚才那句"带了重点人"就是从这里出去的。' },
+      { text: '旁边的登记本上，"重点"两个字有一栏专门的空格。' }
     ]
   },
   {

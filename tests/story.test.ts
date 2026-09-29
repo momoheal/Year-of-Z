@@ -384,8 +384,9 @@ describe('第四章 · 回执（第一幕收束）', () => {
       expect(n.target[1]).toBeLessThanOrEqual(b.maxZ);
       expect(n.interactLabel).not.toBe('—');
     }
-    // 第一幕在这里收束：最后一个节点就是全书当前进度的终点
-    expect(NODES[NODES.length - 1].id).toBe('C04-05');
+    // 第一幕在这里收束（其后是第二幕的 C05-00）
+    expect(ch4[ch4.length - 1].id).toBe('C04-05');
+    expect(NODES[NODES.indexOf(ch4[ch4.length - 1]) + 1].id).toBe('C05-00');
   });
 
   it('核查口径：代签与"两行一起打勾"都被拒绝，且不改变任何状态', () => {
@@ -434,7 +435,7 @@ describe('第四章 · 回执（第一幕收束）', () => {
   });
 
   it('v3 存档迁移到 v4：第三章打完的老档接着进第四章', () => {
-    const upTo = NODES.filter((n) => !n.id.startsWith('C04-')).map((n) => n.id);
+    const upTo = NODES.slice(0, NODES.findIndex((n) => n.id === 'C04-00')).map((n) => n.id);
     const legacyV3 = JSON.stringify({
       version: 3,
       completed: upTo,
@@ -451,6 +452,89 @@ describe('第四章 · 回执（第一幕收束）', () => {
     expect(restored.state.version).toBe(SAVE_VERSION);
     expect(restored.state.finished).toBe(false); // 新增章节后不再算"通关"
     expect(currentNode(restored.state)?.id).toBe('C04-00');
+  });
+});
+
+describe('第五章 · 签过的纸（第二幕开篇）', () => {
+  it('六个节点、无战斗；场景数据齐备、目标点在界内', () => {
+    const ch5 = NODES.filter((n) => n.id.startsWith('C05-'));
+    expect(ch5).toHaveLength(6);
+    expect(ch5.some((n) => n.encounter)).toBe(false);
+    for (const n of ch5) {
+      expect(SPAWNS[n.scene]).toBeTruthy();
+      const b = SCENE_BOUNDS[n.scene];
+      expect(n.target[0]).toBeGreaterThanOrEqual(b.minX);
+      expect(n.target[0]).toBeLessThanOrEqual(b.maxX);
+      expect(n.target[1]).toBeGreaterThanOrEqual(b.minZ);
+      expect(n.target[1]).toBeLessThanOrEqual(b.maxZ);
+    }
+    expect(NODES[NODES.length - 1].id).toBe('C05-05');
+  });
+
+  it('三处"更省事"的写法都被退回，且不改变任何状态', () => {
+    const a = playUntil('C05-00');
+    expect(completeNode(a, 'C05-00', 'push-window').ok).toBe(false);
+    expect(a.flags).not.toContain('drug-returned');
+    expect(completeNode(a, 'C05-00', 'return-by-rule').ok).toBe(true);
+
+    const b = playUntil('C05-03');
+    expect(completeNode(b, 'C05-03', 'take-tonight').ok).toBe(false);
+    expect(b.flags).not.toContain('liang-joined');
+    expect(completeNode(b, 'C05-03', 'wait-handover').ok).toBe(true);
+
+    const c = playUntil('C05-05');
+    expect(completeNode(c, 'C05-05', 'overwrite').ok).toBe(false);
+    expect(c.flags).not.toContain('chapter5-done');
+    expect(completeNode(c, 'C05-05', 'keep-original').ok).toBe(true);
+  });
+
+  it('梁医生常驻同行，但不入队、不做好感度；安全区那一段不设选择', () => {
+    const s = playAll();
+    expect(hasFlag(s, 'met-liang')).toBe(true);
+    expect(hasFlag(s, 'liang-joined')).toBe(true);
+    const join = s.log.filter((l) => l.node === 'C05-03').map((l) => l.text).join('\n');
+    expect(join).toContain('不编入任何队列');
+    // 好感度/队伍一类的系统字段不存在
+    expect(Object.keys(s)).not.toContain('party');
+    expect(Object.keys(s)).not.toContain('affinity');
+    // C05-04（安全区 → 岗亭）是叙述，不给选择
+    expect(NODES.find((n) => n.id === 'C05-04')!.choices ?? []).toHaveLength(0);
+  });
+
+  it('不给自愈结论；"山线"作为待核留在日志里', () => {
+    const s = playAll();
+    const ch5 = s.log.filter((l) => l.node.startsWith('C05-'));
+    const text = ch5.map((l) => l.text).join('\n');
+    expect(text).toContain('山线');
+    expect(s.log.some((l) => l.text.includes('山线') && l.type === 'uncertain')).toBe(true);
+    expect(hasFlag(s, 'shanxian-pending')).toBe(true);
+    expect(text).not.toMatch(/确认自愈|已痊愈|具有免疫|可以解除隔离/);
+    expect(text).toContain('未取得任何痊愈或免疫结论');
+    // 系统分类 ≠ 病情，这句口径必须在
+    expect(text).toContain('指系统分类，不指病情');
+    // 网门那条线只登记查询，不下死亡结论
+    expect(text).toContain('无逐人去向');
+    expect(text).not.toMatch(/全部死亡|都死了/);
+  });
+
+  it('v4 存档迁移到 v5：第一幕打完的老档接着进第五章', () => {
+    const upTo = NODES.slice(0, NODES.findIndex((n) => n.id === 'C05-00')).map((n) => n.id);
+    const legacy = JSON.stringify({
+      version: 4,
+      completed: upTo,
+      choices: {},
+      log: [],
+      flags: ['chapter4-done'],
+      itemJournal: [{ node: 'init', add: ['gloves', 'biscuit', 'vest'], remove: [] }],
+      player: { x: -3, z: 4 },
+      scene: 'trackside',
+      finished: true
+    });
+    const restored = parseSave(legacy);
+    expect(restored.recovered).toBe(false);
+    expect(restored.state.version).toBe(SAVE_VERSION);
+    expect(restored.state.finished).toBe(false);
+    expect(currentNode(restored.state)?.id).toBe('C05-00');
   });
 });
 

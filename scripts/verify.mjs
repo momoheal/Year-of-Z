@@ -288,12 +288,73 @@ try {
   await c4.screenshot({ path: `${SHOT_DIR}/11-act1-end.png` });
   await c4.close();
 
+  // ---------- 第五章《签过的纸》对话流（?jump=c5） ----------
+  const c5 = await mkPage({ viewport: { width: 1280, height: 720 } });
+  await c5.goto(u('jump=c5&e2e=1'), { waitUntil: 'networkidle' });
+  await c5.waitForTimeout(1800);
+  ok(await nodeId(c5) === 'C05-00', '试玩直达：当前任务为 C05-00');
+  ok(await c5.evaluate(() => window.__yoz.flags()).then((f) => f.includes('chapter4-done')),
+    '第一幕按默认选择补全（含第四章完成标记）');
+
+  // C05-00：先试被退回的"先收下，章明天补"
+  await c5.evaluate(() => window.__yoz.toTarget());
+  await c5.waitForTimeout(300);
+  await c5.keyboard.press('KeyE');
+  await c5.waitForTimeout(400);
+  for (let i = 0; i < 24 && !(await c5.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+    await c5.keyboard.press('Space');
+    await c5.waitForTimeout(150);
+  }
+  await c5.locator('#dialog-choices .choice-btn', { hasText: '章明天补' }).first().click();
+  await c5.waitForTimeout(200);
+  for (let i = 0; i < 12 && !(await c5.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+    await c5.keyboard.press('Space');
+    await c5.waitForTimeout(200);
+  }
+  ok(await c5.locator('#dialog-choices:visible .choice-btn').count() > 0, '「先收下，章明天补」被退回选择页');
+  ok(await nodeId(c5) === 'C05-00', '被退回不推进任务');
+  await c5.locator('#dialog-choices .choice-btn', { hasText: '按原运输要求退回' }).first().click();
+  await runDialog(c5);
+  await c5.waitForTimeout(1400);
+  ok(await nodeId(c5) === 'C05-01', 'C05-00 完成 → C05-01');
+  ok(await c5.evaluate(() => window.__yoz.scene()) === 'medpoint', '场景切到临时医疗点');
+
+  await playNode(c5, '先请管药的人核验箱子');   // C05-01
+  await c5.waitForTimeout(900);
+  ok(await nodeId(c5) === 'C05-02', 'C05-01 完成 → C05-02');
+  await playNode(c5, '只问那份处理撤销了没有'); // C05-02
+  await c5.waitForTimeout(900);
+  ok(await nodeId(c5) === 'C05-03', 'C05-02 完成 → C05-03');
+  await playNode(c5, '等两天');                 // C05-03
+  await c5.waitForTimeout(1400);
+  ok(await nodeId(c5) === 'C05-04', 'C05-03 完成 → C05-04');
+  ok(await c5.evaluate(() => window.__yoz.scene()) === 'safezone', '场景切到职工安全区');
+  await c5.screenshot({ path: `${SHOT_DIR}/14-safezone.png` });
+  await playNode(c5);                           // C05-04（无选择：叙述）
+  await c5.waitForTimeout(1400);
+  ok(await nodeId(c5) === 'C05-05', 'C05-04 完成 → C05-05');
+  ok(await c5.evaluate(() => window.__yoz.scene()) === 'recvstation', '场景切回接收站');
+  await playNode(c5, '保留原记录');             // C05-05
+  await c5.waitForTimeout(1200);
+
+  const log5 = await c5.evaluate(() => window.__yoz.logText());
+  ok(log5.includes('山线'), '「山线」作为待核留在日志里');
+  ok(log5.includes('指系统分类，不指病情'), '"状态"口径：系统分类不等于病情');
+  ok(log5.includes('无逐人去向') && !/都死了|全部死亡/.test(log5), '网门那条线只登记查询，不下死亡结论');
+  ok(!/确认自愈|已痊愈|具有免疫/.test(log5), '不给自愈或免疫结论');
+  const flags5 = await c5.evaluate(() => window.__yoz.flags());
+  ok(flags5.includes('liang-joined') && flags5.includes('chapter5-done'), '梁医生同行 + 第五章完成标记');
+  ok(await c5.locator('#end-screen:visible').count() === 1, '第二幕开篇收束：结尾画面出现');
+  await c5.screenshot({ path: `${SHOT_DIR}/15-act2-open.png` });
+  await c5.close();
+
   // ---------- 建景冒烟：逐个场景切过去，确认都能建起来且不报错 ----------
   const sc = await mkPage({ viewport: { width: 1280, height: 720 } });
   await sc.goto(u('jump=c3&e2e=1'), { waitUntil: 'networkidle' });
   await sc.waitForTimeout(1800);
   const SCENES = ['park', 'depot', 'quarantine', 'gate', 'yard', 'road', 'pump', 'liuanli', 'canteen',
-    'dongjie', 'kitchen', 'obsroom', 'home', 'repair', 'waterfix', 'gridoffice', 'trackside'];
+    'dongjie', 'kitchen', 'obsroom', 'home', 'repair', 'waterfix', 'gridoffice', 'trackside',
+    'recvstation', 'medpoint', 'safezone', 'checkgate'];
   const sceneErrors = [];
   sc.on('pageerror', (e) => sceneErrors.push(String(e)));
   for (const id of SCENES) {
@@ -303,7 +364,7 @@ try {
     if (id === 'canteen') await sc.screenshot({ path: `${SHOT_DIR}/12-canteen.png` });
     if (id === 'trackside') await sc.screenshot({ path: `${SHOT_DIR}/13-trackside.png` });
   }
-  ok(sceneErrors.length === 0, `17 个场景全部建景成功、无运行时错误（${sceneErrors.length}）`);
+  ok(sceneErrors.length === 0, `21 个场景全部建景成功、无运行时错误（${sceneErrors.length}）`);
   for (const e of sceneErrors.slice(0, 3)) console.log('  scene:', e);
   await sc.close();
 

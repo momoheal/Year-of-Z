@@ -21,7 +21,7 @@ import type { SceneId } from './story';
 import { SCENE_BOUNDS, type WallRect } from './mapdata';
 import {
   C, PALLET, mat, box, cyl, sph, canvasTexture, textBoard, groundTexture, aoPatch,
-  makePerson, makeVan, makeDust, brickMat, facade, paperTexture, signTexture,
+  makePerson, makeVan, makeDust, brickMat, fadedWallMat, facade, paperTexture, signTexture,
   roomShell, ceilingLamp
 } from './buildkit';
 
@@ -596,6 +596,169 @@ function buildTrackside(g: THREE.Group, ctx: SceneryCtx): void {
   dust(g, ctx, 46, { x: [-8, 8], y: [0.3, 3.0], z: [-5, 5] });
 }
 
+
+// ================================================================ 第五章《签过的纸》
+
+/** 带小窗口的柜台墙：本章反复出现的"隔着窗口说话" */
+function counterWall(g: THREE.Group, x: number, z: number, w: number, label: string, ry = 0): void {
+  const grp = new THREE.Group();
+  grp.position.set(x, 0, z);
+  grp.rotation.y = ry;
+  g.add(grp);
+  box(grp, w, 3.0, 0.4, fadedWallMat('#c4c2b6'), 0, 1.5, 0).castShadow = false;
+  box(grp, 1.9, 1.05, 0.14, mat(0x2f3833), 0, 1.35, 0.2);                 // 窗洞（暗）
+  box(grp, 2.3, 0.14, 0.7, C.metal, 0, 0.92, 0.42);                       // 台面
+  box(grp, 0.5, 0.02, 0.36, mat(0xe6e2d4), -0.5, 1.0, 0.42);              // 台面上的单子
+  textBoard(grp, 1.5, 0.34, signTexture(label, 300, 70), 0, 2.25, 0.21);
+  box(grp, 0.24, 0.3, 0.02, mat(0xd6d2c2), 0.75, 1.5, 0.21).castShadow = false; // 贴着的值班表
+  aoPatch(grp, w, 1.6, 0, 0.5, 0.35);
+}
+
+function buildRecvstation(g: THREE.Group, ctx: SceneryCtx): void {
+  const b = SCENE_BOUNDS.recvstation;
+  roomShell(g, b, { doorX: 0, doorW: 1.8, floor: ['#77787a', '#5a5b5e'], wallTint: '#c8c9c2' });
+  lamp(g, ctx, -2.2, 2.74, -0.6);
+  lamp(g, ctx, 2.2, 2.74, 1.4);
+  // 北墙：接收窗口（C05-00 在这里被拒收）
+  counterWall(g, 1.8, -3.6, 5.2, '接收窗口 · 凭授权签收');
+  // 西侧：档案柜与翻开的卷宗（C05-05）
+  for (let i = 0; i < 3; i++) {
+    box(g, 1.0, 1.9, 0.5, mat(0x767c80), -4.6, 0.95, -0.6 + i * 1.5);
+    for (let k = 0; k < 4; k++) {
+      box(g, 0.94, 0.05, 0.46, mat(0x5d6367), -4.6, 0.4 + k * 0.42, -0.36 + i * 1.5).castShadow = false;
+    }
+  }
+  box(g, 1.6, 0.1, 0.9, C.wood, -2.2, 0.76, 1.8);
+  for (const [lx, lz] of [[0.7, 0.36], [-0.7, 0.36], [0.7, -0.36], [-0.7, -0.36]] as const) {
+    box(g, 0.07, 0.76, 0.07, C.metalDark, -2.2 + lx, 0.38, 1.8 + lz);
+  }
+  textBoard(g, 0.5, 0.62, paperTexture('回执 · 交接联', 6), -2.35, 0.82, 1.8).rotation.x = -Math.PI / 2;
+  textBoard(g, 0.42, 0.54, paperTexture('更正说明', 4), -1.9, 0.82, 1.9).rotation.x = -Math.PI / 2;
+  // 排队线与两把等候椅
+  box(g, 3.6, 0.02, 0.1, mat(0xb8a24e), 1.8, 0.02, -1.6).castShadow = false;
+  for (const cx2 of [3.8, 4.6]) {
+    box(g, 0.44, 0.06, 0.44, C.wood, cx2, 0.46, 2.6);
+    box(g, 0.44, 0.5, 0.06, C.wood, cx2, 0.72, 2.8);
+  }
+  // 走廊末端的广播喇叭（"状态不变的按旧类别转运"）
+  box(g, 0.34, 0.3, 0.26, mat(0x6b6f72), 5.2, 2.5, 1.0);
+  cyl(g, 0.16, 0.12, mat(0x3f4446), 5.0, 2.5, 1.0, { rz: Math.PI / 2 });
+  // 赵网格与接待员
+  const zhao = makePerson({ coat: 0x6b6f62, pants: 0x42474c, skin: 0xd2b193 });
+  zhao.position.set(-1.2, 0, 2.6);
+  zhao.rotation.y = 0.4;
+  g.add(zhao);
+  const clerk = makePerson({ coat: 0x5f6a72, pants: 0x3f4550 });
+  clerk.position.set(1.8, 0, -2.6);
+  clerk.rotation.y = 0;
+  g.add(clerk);
+  dust(g, ctx, 30, { x: [-5, 5], y: [0.4, 2.4], z: [-3, 4] });
+}
+
+function buildMedpoint(g: THREE.Group, ctx: SceneryCtx): void {
+  const b = SCENE_BOUNDS.medpoint;
+  roomShell(g, b, { doorX: 0.4, doorW: 1.4, floor: ['#7a7b74', '#5c5d57'], wallTint: '#ccccc2' });
+  lamp(g, ctx, -1.6, 2.74, -1.0);
+  lamp(g, ctx, 2.0, 2.74, 1.2);
+  // 值班桌：压着杯子的那张旧纸（C05-02）
+  box(g, 1.8, 0.1, 0.95, C.wood, 1.4, 0.76, 0.6);
+  for (const [lx, lz] of [[0.8, 0.4], [-0.8, 0.4], [0.8, -0.4], [-0.8, -0.4]] as const) {
+    box(g, 0.07, 0.76, 0.07, C.metalDark, 1.4 + lx, 0.38, 0.6 + lz);
+  }
+  textBoard(g, 0.44, 0.56, paperTexture('处理决定', 4, '#ded9c8'), 1.2, 0.82, 0.6).rotation.x = -Math.PI / 2;
+  cyl(g, 0.055, 0.12, mat(0xcfd3cc), 1.32, 0.86, 0.5);   // 压着纸角的杯子
+  box(g, 0.3, 0.1, 0.22, mat(0x4d5259), 2.0, 0.86, 0.3); // 座机
+  aoPatch(g, 2.4, 1.6, 1.4, 0.6, 0.4);
+  // 药品交接台：退回的箱子、封签与温度记录
+  box(g, 1.6, 0.9, 0.8, mat(0x8f958c), -1.2, 0.45, -1.0);
+  box(g, 1.7, 0.08, 0.86, C.metal, -1.2, 0.94, -1.0);
+  for (let i = 0; i < 2; i++) {
+    box(g, 0.66, 0.42, 0.5, mat(i ? 0xbfc6c2 : 0xd0d5d0), -1.55 + i * 0.72, 1.19, -1.0);
+    box(g, 0.2, 0.02, 0.12, mat(0xd8524a), -1.55 + i * 0.72, 1.41, -0.78).castShadow = false; // 封签
+  }
+  textBoard(g, 0.4, 0.5, paperTexture('温度记录', 4), -0.4, 1.0, -1.0).rotation.x = -Math.PI / 2;
+  // 病床区：三张床与床尾的交接卡
+  for (let i = 0; i < 3; i++) {
+    const bz = -2.6 + i * 1.5;
+    box(g, 1.9, 0.34, 0.85, mat(0x8c8f8a), -3.2, 0.34, bz);
+    box(g, 1.95, 0.16, 0.9, C.sheet, -3.2, 0.58, bz);
+    box(g, 0.44, 0.12, 0.34, mat(0xd8d4c8), -3.95, 0.72, bz);
+    box(g, 0.3, 0.02, 0.2, mat(0xe6e2d4), -2.3, 0.6, bz).castShadow = false;
+  }
+  // 药柜与洗手台
+  box(g, 0.9, 1.8, 0.45, mat(0xd2d5d0), 3.6, 0.9, -2.6);
+  for (let i = 0; i < 3; i++) box(g, 0.84, 0.05, 0.42, mat(0xa9aeb0), 3.6, 0.5 + i * 0.5, -2.4).castShadow = false;
+  box(g, 0.7, 0.16, 0.5, mat(0xd6d8d2), 4.2, 0.86, 1.8);
+  cyl(g, 0.03, 0.22, C.metal, 4.2, 1.02, 1.9);
+  // 梁医生（常驻同行：此后几段路都有他在场）
+  const liang = makePerson({ coat: 0xd8dbd6, pants: 0x4a5058, skin: 0xd2b193 });
+  liang.position.set(1.4, 0, 1.8);
+  liang.rotation.y = Math.PI;
+  g.add(liang);
+  dust(g, ctx, 26, { x: [-4, 4], y: [0.4, 2.4], z: [-3, 4] });
+}
+
+function buildSafezone(g: THREE.Group, ctx: SceneryCtx): void {
+  outdoorGround(g, 'safezone', '#60635e', '#464942');
+  pavement(g, 7, 5, 0, 1.4);
+  // 安全区外墙与那扇侧窗（挡门的桶就在窗下）
+  facade(g, 12, 9, 4, 0, -4.4, { floors: 3, cols: 4 });
+  counterWall(g, 0.6, -2.4, 3.4, '职工安全区 · 侧窗');
+  cyl(g, 0.3, 0.8, mat(0x6f7a6a), 1.9, 0.4, -1.7);   // 挡门的桶（搬开过一次）
+  cyl(g, 0.3, 0.8, mat(0x6f7a6a), 2.6, 0.4, -1.5);
+  for (let i = 0; i < 3; i++) cyl(g, 0.055, 0.11, mat(0xdfe3dc), -0.2 + i * 0.3, 1.0, -1.98); // 送出来的几杯水
+  // 围栏、出入登记牌与晾着的工服
+  for (let i = 0; i < 9; i++) box(g, 0.08, 1.5, 0.08, C.metalDark, -5 + i * 1.2, 0.75, 2.6);
+  box(g, 11, 0.07, 0.1, C.metalDark, -0.2, 1.5, 2.6).castShadow = false;
+  textBoard(g, 1.5, 0.4, signTexture('出入须登记', 300, 72), -3.4, 1.9, -2.2);
+  for (let i = 0; i < 4; i++) box(g, 0.5, 0.7, 0.02, mat(i % 2 ? 0x8a9298 : 0xa9a292), -4.6 + i * 0.7, 1.9, -1.9);
+  // 交接车停在路边
+  const van = makeVan();
+  van.position.set(3.6, 0, 1.8);
+  van.rotation.y = -1.5;
+  g.add(van);
+  const liang = makePerson({ coat: 0xd8dbd6, pants: 0x4a5058, skin: 0xd2b193 });
+  liang.position.set(1.2, 0, -0.9);
+  liang.rotation.y = Math.PI - 0.3;
+  g.add(liang);
+  dust(g, ctx, 30, { x: [-5, 5], y: [0.3, 2.6], z: [-3, 3] });
+}
+
+function buildCheckgate(g: THREE.Group, ctx: SceneryCtx): void {
+  outdoorGround(g, 'checkgate', '#67655c', '#4a4840');
+  pavement(g, 16, 5.5, 0, 0.6);
+  // 岗亭、横杆与路锥
+  box(g, 2.0, 2.5, 2.0, mat(0x8e9490), -3.6, 1.25, -1.4);
+  box(g, 2.2, 0.16, 2.2, mat(0x5d6360), -3.6, 2.6, -1.4);
+  box(g, 1.2, 1.0, 0.1, mat(0xbfcac6, { emissive: 0xbfcac6, emissiveIntensity: 0.2 }), -3.6, 1.6, -0.36).castShadow = false;
+  box(g, 0.24, 0.3, 0.16, mat(0x3f4446), -2.7, 1.5, -0.5);  // 对讲机
+  box(g, 5.0, 0.12, 0.12, mat(0xd8522f), 0.2, 1.05, -0.4);
+  cyl(g, 0.12, 1.05, C.metalDark, -2.3, 0.52, -0.4);
+  for (let i = 0; i < 4; i++) {
+    const cone = cyl(g, 0.22, 0.55, mat(0xd05a3a), 2.6 + i * 1.1, 0.27, 1.6);
+    cone.scale.set(0.44, 0.55, 0.44);
+  }
+  // 停在杆前的交接车、等核查的人与摊开的证件
+  const van = makeVan();
+  van.position.set(2.4, 0, 2.6);
+  van.rotation.y = 0.05;
+  g.add(van);
+  const liang = makePerson({ coat: 0xd8dbd6, pants: 0x4a5058, skin: 0xd2b193 });
+  liang.position.set(0.4, 0, 1.4);
+  liang.rotation.y = -1.9;
+  g.add(liang);
+  const zhao = makePerson({ coat: 0x6b6f62, pants: 0x42474c });
+  zhao.position.set(-0.6, 0, 2.4);
+  zhao.rotation.y = -1.2;
+  g.add(zhao);
+  const guard = makePerson({ coat: 0x4e5a63, pants: 0x3a4149, cap: 0x3f4a52, vest: 0xd8c14a });
+  guard.position.set(-2.4, 0, 0.4);
+  guard.rotation.y = 1.4;
+  g.add(guard);
+  textBoard(g, 1.8, 0.42, signTexture('核查点 · 请出示证件', 360, 76), -3.6, 2.9, -0.35);
+  dust(g, ctx, 34, { x: [-6, 6], y: [0.3, 2.6], z: [-3, 4] });
+}
+
 // ================================================================ 装配表
 
 type Builder = (g: THREE.Group, ctx: SceneryCtx) => void;
@@ -612,7 +775,11 @@ const BUILDERS: Partial<Record<SceneId, Builder>> = {
   repair: buildRepair,
   waterfix: buildWaterfix,
   gridoffice: buildGridoffice,
-  trackside: buildTrackside
+  trackside: buildTrackside,
+  recvstation: buildRecvstation,
+  medpoint: buildMedpoint,
+  safezone: buildSafezone,
+  checkgate: buildCheckgate
 };
 
 /** 建景入口：有正式建景就用，没有的场景回退为空（由 world.ts 的兜底地面负责） */
@@ -697,5 +864,27 @@ export const SCENERY_BLOCKERS: Partial<Record<SceneId, WallRect[]>> = {
     { x: 0, z: -3.8, hx: 10, hz: 1.7, h: 3.0 },
     { x: 4.4, z: 0.6, hx: 1.9, hz: 0.4, h: 1.1 },
     { x: 0.4, z: 2.6, hx: 0.9, hz: 1.4, h: 0.8 }
+  ],
+  recvstation: [
+    { x: 1.8, z: -3.6, hx: 2.6, hz: 0.45, h: 3.0 },   // 接收窗口柜台
+    { x: -4.6, z: 0.9, hx: 0.5, hz: 2.6, h: 1.9 },    // 档案柜
+    { x: -2.2, z: 1.8, hx: 0.85, hz: 0.5, h: 0.8 }    // 查档用的桌子
+  ],
+  medpoint: [
+    { x: 1.4, z: 0.6, hx: 0.9, hz: 0.5, h: 0.8 },     // 值班桌
+    { x: -1.2, z: -1.0, hx: 0.85, hz: 0.45, h: 0.9 }, // 药品交接台
+    { x: -3.2, z: -0.4, hx: 1.0, hz: 2.2, h: 0.6 },   // 三张床
+    { x: 3.6, z: -2.6, hx: 0.5, hz: 0.3, h: 1.8 }     // 药柜
+  ],
+  safezone: [
+    { x: 0, z: -4.4, hx: 6, hz: 2, h: 9 },            // 安全区楼体
+    { x: 0.6, z: -2.4, hx: 1.7, hz: 0.45, h: 3.0 },   // 侧窗柜台
+    { x: 2.2, z: -1.6, hx: 0.7, hz: 0.4, h: 0.8 },    // 挡门的桶
+    { x: 3.6, z: 1.8, hx: 1.0, hz: 2.2, h: 1.8 }      // 交接车
+  ],
+  checkgate: [
+    { x: -3.6, z: -1.4, hx: 1.0, hz: 1.0, h: 2.5 },   // 岗亭
+    { x: 0.2, z: -0.4, hx: 2.5, hz: 0.12, h: 1.1 },   // 横杆
+    { x: 2.4, z: 2.6, hx: 2.2, hz: 1.0, h: 1.8 }      // 交接车
   ]
 };
