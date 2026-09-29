@@ -47,7 +47,7 @@ try {
   };
   /** 把当前打开的对话点完；遇到选择支按标签关键字点选 */
   const runDialog = async (pg, pick) => {
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 60; i++) {
       const choices = pg.locator('#dialog-choices:visible .choice-btn');
       if (await choices.count()) {
         const want = pick ? pg.locator('#dialog-choices .choice-btn', { hasText: pick }) : choices.first();
@@ -199,13 +199,13 @@ try {
   await c3.waitForTimeout(300);
   await c3.keyboard.press('KeyE');
   await c3.waitForTimeout(400);
-  for (let i = 0; i < 10 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+  for (let i = 0; i < 24 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
     await c3.keyboard.press('Space');
     await c3.waitForTimeout(160);
   }
   await c3.locator('#dialog-choices .choice-btn', { hasText: '照原样签了' }).first().click();
   await c3.waitForTimeout(200);
-  for (let i = 0; i < 4 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+  for (let i = 0; i < 12 && !(await c3.locator('#dialog-choices:visible .choice-btn').count()); i++) {
     await c3.keyboard.press('Space');
     await c3.waitForTimeout(200);
   }
@@ -239,13 +239,13 @@ try {
   await c4.waitForTimeout(300);
   await c4.keyboard.press('KeyE');
   await c4.waitForTimeout(400);
-  for (let i = 0; i < 12 && !(await c4.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+  for (let i = 0; i < 24 && !(await c4.locator('#dialog-choices:visible .choice-btn').count()); i++) {
     await c4.keyboard.press('Space');
     await c4.waitForTimeout(150);
   }
   await c4.locator('#dialog-choices .choice-btn', { hasText: '顺手替他们签' }).first().click();
   await c4.waitForTimeout(200);
-  for (let i = 0; i < 4 && !(await c4.locator('#dialog-choices:visible .choice-btn').count()); i++) {
+  for (let i = 0; i < 12 && !(await c4.locator('#dialog-choices:visible .choice-btn').count()); i++) {
     await c4.keyboard.press('Space');
     await c4.waitForTimeout(200);
   }

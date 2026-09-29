@@ -306,13 +306,18 @@ describe('文本节奏与环境热点（对话面板可读性）', () => {
     ...(n.choices ?? []).flatMap((c) => c.pages.map((p) => ({ node: n.id, ...p })))
   ]);
 
-  it('单页不超过一屏：叙述 ≤ 130 字，对白 ≤ 45 字；第四章按新标准 ≤ 95 字', () => {
+  it('单页不超过一屏：全书叙述 ≤ 85 字、对白 ≤ 45 字（四章统一口径）', () => {
     for (const p of allPages) {
-      const limit = p.speaker ? 45 : 130;
+      const limit = p.speaker ? 45 : 85;
       expect(`${p.node}:${p.text.length}<=${limit}`).toBe(`${p.node}:${Math.min(p.text.length, limit)}<=${limit}`);
-      if (p.node.startsWith('C04-') && !p.speaker) {
-        expect(`${p.node}:${p.text.length}<=95`).toBe(`${p.node}:${Math.min(p.text.length, 95)}<=95`);
-      }
+    }
+  });
+
+  it('对白占比：每一章都有足够的人声，不是整章旁白', () => {
+    for (const ch of ['C01-', 'C02-', 'C03-', 'C04-']) {
+      const pages = allPages.filter((p) => p.node.startsWith(ch));
+      const spoken = pages.filter((p) => p.speaker).length;
+      expect(`${ch}${spoken > pages.length * 0.15}`).toBe(`${ch}true`);
     }
   });
 
