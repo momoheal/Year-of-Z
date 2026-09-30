@@ -24,7 +24,18 @@ export const SPAWNS: Record<SceneId, { x: number; z: number }> = {
   // 第三章
   dongjie: { x: 0, z: 6 },       // 铁网门外的街口
   kitchen: { x: 0.5, z: 4.0 },   // 临时厨房（活动室）门内
-  obsroom: { x: -0.5, z: 3.2 }   // 外勤观察处走廊侧
+  obsroom: { x: -0.5, z: 3.2 },  // 外勤观察处走廊侧
+  // 第四章《回执》占位场景
+  home: { x: 0, z: 3.2 },        // 自家门口（进门就是那把椅子）
+  repair: { x: -2.6, z: 4.2 },   // 物资站工具棚外 → 旁边的工坊
+  waterfix: { x: -2.0, z: 3.0 }, // 净水设备维修点院子
+  gridoffice: { x: 1.6, z: 3.2 },// 网格员办公室门口
+  trackside: { x: -3.0, z: 4.0 }, // 铁路边的路口
+  // 第五章《签过的纸》
+  recvstation: { x: 0, z: 4.2 },  // 接收站：窗口在北，档案柜在西
+  medpoint: { x: 0.4, z: 3.4 },   // 临时医疗点：值班室门内
+  safezone: { x: -2.8, z: 2.6 },  // 职工安全区：挡着桶的那个窗口外
+  checkgate: { x: 0, z: 4.4 }     // 路上的核查岗亭
 };
 
 export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
@@ -38,7 +49,16 @@ export const SCENE_CAPTIONS: Partial<Record<SceneId, string>> = {
   canteen: '小区临时食堂 —— 傍晚',
   dongjie: '旧城东街 · 职工宿舍门口 —— 上午',
   kitchen: '东街临时厨房 · 原职工活动室',
-  obsroom: '外勤观察处 —— 当夜至次日'
+  obsroom: '外勤观察处 —— 当夜至次日',
+  home: '许晨家 —— 回家那天傍晚',
+  repair: '物资站工具棚 · 旁边的工坊 —— 又过了几天',
+  waterfix: '净水设备维修点 —— 查料那天',
+  gridoffice: '网格员办公室 —— 第三次见面',
+  trackside: '铁路边 · 卸货的路口 —— 当天',
+  recvstation: '接收站 · 窗口与档案室 —— 第二幕开始',
+  medpoint: '临时医疗点 —— 药退回来的那天傍晚',
+  safezone: '职工安全区 · 侧窗 —— 路上第一站',
+  checkgate: '核查岗亭 —— 路上第二站'
 };
 
 /** 场景可活动外框（测试校验目标点在界内） */
@@ -56,7 +76,18 @@ export const SCENE_BOUNDS: Record<SceneId, { minX: number; maxX: number; minZ: n
   // 第三章：厨房是遭遇战场地，外框与 combat.ts 的 ARENA 对齐（留 0.4 米墙厚余量）
   dongjie: { minX: -10, maxX: 10, minZ: -6, maxZ: 10 },
   kitchen: { minX: -7, maxX: 7, minZ: -5.2, maxZ: 5.2 },
-  obsroom: { minX: -6, maxX: 6, minZ: -4, maxZ: 5 }
+  obsroom: { minX: -6, maxX: 6, minZ: -4, maxZ: 5 },
+  // 第四章：都是"说话与核对"的小场地，外框按节点 target 留边
+  home: { minX: -5, maxX: 5, minZ: -4, maxZ: 4.5 },
+  repair: { minX: -7, maxX: 7, minZ: -5, maxZ: 5.5 },
+  waterfix: { minX: -6, maxX: 6, minZ: -5, maxZ: 4.5 },
+  gridoffice: { minX: -5, maxX: 5, minZ: -4, maxZ: 4.5 },
+  trackside: { minX: -8, maxX: 8, minZ: -5, maxZ: 5.5 },
+  // 第五章：都是"隔着窗口说话"的小场地
+  recvstation: { minX: -6, maxX: 6, minZ: -4, maxZ: 5 },
+  medpoint: { minX: -5, maxX: 5, minZ: -4, maxZ: 4.5 },
+  safezone: { minX: -6, maxX: 6, minZ: -4, maxZ: 4 },
+  checkgate: { minX: -7, maxX: 7, minZ: -4, maxZ: 5 }
 };
 
 // ---------------------------------------------------------------- 园区静态阻挡（与 world.ts parkPhysics 同步被消费）
@@ -273,6 +304,155 @@ export const HOTSPOTS: HotspotDef[] = [
     scene: 'depot', x: -13.4, z: 6.2, label: '看看笼门边',
     pages: [
       { text: '灰灰压着你留在笼门边的布袋。名字叫到第三声，尾巴先动了。照护人说，先找主人，找不到，你来认。' }
+    ]
+  },
+  // ---- 第二—四章：正式建景之后补上的"注视"点（只读回声，不写新事实） ----
+  {
+    id: 'hot-yard-board',
+    scene: 'yard', x: -6.2, z: 2.2, label: '看看宣传栏',
+    pages: [
+      { text: '这周的配送安排压在上周的上面，边角卷起来。两张纸的日期之间差着四天。' },
+      { text: '有人用圆珠笔在空白处补了一行房号，字比印刷体大。' }
+    ]
+  },
+  {
+    id: 'hot-yard-cart',
+    scene: 'yard', x: 0, z: 6, label: '看看板车',
+    exceptNodes: ['C02-00'],
+    pages: [
+      { text: '车板中间压出一道浅槽。轮轴上缠着新换的胶布——上一趟是谁修的，没人记。' }
+    ]
+  },
+  {
+    id: 'hot-road-water',
+    scene: 'road', x: 6, z: -2.9, label: '看看积水',
+    pages: [
+      { text: '水面浮着一层油光，底下是没冲走的碎玻璃。桥洞那头的光被切成一条。' },
+      { text: '有人踩着两块砖过去，砖上的鞋印已经干了。' }
+    ]
+  },
+  {
+    id: 'hot-road-post',
+    scene: 'road', x: 1.2, z: 2.6, label: '看看岗亭',
+    pages: [
+      { text: '玻璃上贴着通行时段，最底下一行被撕掉半张。登记本摊在桌上，最新一页只有三行。' }
+    ]
+  },
+  {
+    id: 'hot-pump-sand',
+    scene: 'pump', x: -3.4, z: 8, label: '看看沙袋',
+    pages: [
+      { text: '沙袋摞得不高，刚够挡住便道口。最上面一只被划破过，又用塑料条捆了回去。' }
+    ]
+  },
+  {
+    id: 'hot-liuanli-scale',
+    scene: 'liuanli', x: -1.6, z: 7.6, label: '看看地秤',
+    pages: [
+      { text: '秤盘边沿有一圈米粒压出的白印。记录板上今天只写了两笔，后面空着。' }
+    ]
+  },
+  {
+    id: 'hot-canteen-notice',
+    scene: 'canteen', x: -5.0, z: -6.6, label: '看看供餐须知',
+    pages: [
+      { text: '"一人一份"下面，有人补了一行小字：家里有下不了床的，报房号。' },
+      { text: '纸角被摸得发毛。' }
+    ]
+  },
+  {
+    id: 'hot-dongjie-ev',
+    scene: 'dongjie', x: 4.6, z: -0.6, label: '看看筐里的纸牌',
+    pages: [
+      { text: '硬纸牌上写着几户人的房号和忌口，字写得很大，像怕骑到楼下看不清。' },
+      { text: '一角被雨打软了，有个房号看不清。他没有猜。' }
+    ]
+  },
+  {
+    id: 'hot-obsroom-screen',
+    scene: 'obsroom', x: 0.5, z: -3.2, label: '看看投影幕',
+    pages: [
+      { text: '幕布收了一半，卡在那儿。白布上有一块旧水渍，形状像一张没填完的表。' }
+    ]
+  },
+  {
+    id: 'hot-home-records',
+    scene: 'home', x: -1.6, z: -1.6, label: '看看桌上的病历',
+    pages: [
+      { text: '病历按日期排好，最上面一本夹着接送名单：谁坐前排，谁要人扶。' },
+      { text: '边上是药盒。今天的格子已经空了。' }
+    ]
+  },
+  {
+    id: 'hot-repair-rack',
+    scene: 'repair', x: 4.6, z: -2.4, label: '看看报废架',
+    pages: [
+      { text: '每根料上都挂着编号牌，"可拆"两个字盖了章。' },
+      { text: '账上有新料，架子上没有。这里的东西，是别人用坏了才留下的。' }
+    ]
+  },
+  {
+    id: 'hot-waterfix-slab',
+    scene: 'waterfix', x: 2.0, z: -1.8, label: '看看空着的工位',
+    pages: [
+      { text: '地上四个固定孔还在，孔边有一圈没擦干净的印子。' },
+      { text: '这一格该写什么，他们决定先空着。' }
+    ]
+  },
+  {
+    id: 'hot-grid-map',
+    scene: 'gridoffice', x: 2.4, z: -3.2, label: '看看片区图',
+    pages: [
+      { text: '整片宿舍被一支红笔框起来，框线画得很用力，纸背都起了毛。' },
+      { text: '框里没有写人名。' }
+    ]
+  },
+  {
+    id: 'hot-trackside-boxes',
+    scene: 'trackside', x: 4.4, z: 0.6, label: '看看码好的箱子',
+    pages: [
+      { text: '箱侧的批号里有他认得的那一串。空罐是他从园区清出去的，回来时装着豆子。' },
+      { text: '验收章盖在封条上，边缘有点歪。' }
+    ]
+  },
+  {
+    id: 'hot-recv-window',
+    scene: 'recvstation', x: 1.8, z: -1.6, label: '看看窗口里的值班表',
+    pages: [
+      { text: '值班表贴在窗内侧。上一行的名字被划掉，新名字写在旁边，没有盖章。' },
+      { text: '划掉和写上，中间隔了十一天。' }
+    ]
+  },
+  {
+    id: 'hot-recv-archive',
+    scene: 'recvstation', x: -4.2, z: 0.9, label: '看看档案柜',
+    pages: [
+      { text: '柜面上按片区贴着标签，最下面一格没有标签，塞得最满。' },
+      { text: '抽屉轨道上有一层新灰：拉出来过很多次，又一直没人整理。' }
+    ]
+  },
+  {
+    id: 'hot-med-beds',
+    scene: 'medpoint', x: -3.2, z: -0.4, label: '看看床尾的交接卡',
+    pages: [
+      { text: '卡片上只写药名、时间和一个手写的箭头：停了几天，从哪天算起。' },
+      { text: '有一张卡的背面写着家属电话，打过三次，都是空号。' }
+    ]
+  },
+  {
+    id: 'hot-safe-bucket',
+    scene: 'safezone', x: 2.2, z: -1.6, label: '看看挡门的桶',
+    pages: [
+      { text: '桶里是沙子，压得很实。挪开一次要两只手，她只挪开了半边。' },
+      { text: '地上有一道弧形的擦痕。搬回去的时候，是照着原来的印子放的。' }
+    ]
+  },
+  {
+    id: 'hot-gate-radio',
+    scene: 'checkgate', x: -2.8, z: -0.8, label: '看看岗亭的对讲机',
+    pages: [
+      { text: '对讲机挂在窗边，键上磨掉了漆。刚才那句"带了重点人"就是从这里出去的。' },
+      { text: '旁边的登记本上，"重点"两个字有一栏专门的空格。' }
     ]
   },
   {

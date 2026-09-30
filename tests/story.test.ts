@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HOTSPOTS, SCENE_BOUNDS, SPAWNS } from '../src/mapdata';
 import {
   canInteract,
   ITEMS,
@@ -257,6 +258,36 @@ describe('第三章 · 今天不煮了（遭遇战章）', () => {
     expect(s.log.some((l) => l.type === 'uncertain' && l.text.includes('记不全'))).toBe(true);
   });
 
+  it('YZ-15 找回的三处情绪锚点：外套翻袖口、"弄死了"、写在背面', () => {
+    const text = (id: string) => {
+      const n = NODES.find((x) => x.id === id)!;
+      return [...n.pages, ...(n.choices ?? []).flatMap((c) => c.pages)].map((p) => p.text).join('\n');
+    };
+    // ① doc/08「不再叫他」：冯师傅唯一一次"收衣服"的动作
+    const c3 = text('C03-03');
+    expect(c3).toContain('是小远的');
+    expect(c3).toContain('袖子翻了过来');
+    // ② doc/08 收束句：全章情绪最低点，落在母亲电话里
+    expect(text('C03-04')).toContain('我今天把一个人弄死了');
+    // ③ doc/09 末章：章名《写在背面》的出处，也是第四章《回执》的钩子
+    const c5 = text('C03-05');
+    expect(c5).toContain('翻到背面');
+    expect(c5).toContain('冯志远的名字');
+    expect(c5).toContain('我拿了厨房的刀');
+    expect(c5).not.toContain('我没有别的办法。'); // 这句他最后没有写
+  });
+
+  it('写在背面这一页只进日志、不进背包，也不改变对外口径', () => {
+    const s = playAll();
+    const back = s.log.find((l) => l.node === 'C03-05' && l.text.includes('背面'));
+    expect(back).toBeTruthy();
+    expect(back!.type).toBe('fact');
+    expect(back!.text).toContain('不交给任何人');
+    // 私下写的一页不是对外陈述：不出现在任何道具里
+    const items = s.itemJournal.flatMap((d) => d.add).join(',');
+    expect(items).not.toContain('notebook-back');
+  });
+
   it('东街口径：十九人是到场、二十二人是核实后需配送，数字不相减', () => {
     const s = playAll();
     const ch3 = s.log.filter((l) => l.node.startsWith('C03-')).map((l) => l.text).join('\n');
@@ -266,6 +297,244 @@ describe('第三章 · 今天不煮了（遭遇战章）', () => {
     // 本章不揭示自愈，也不给冯师傅的暴露结果下结论
     expect(ch3).not.toMatch(/自愈|痊愈|不会感染|已排除感染/);
     expect(s.log.some((l) => l.node.startsWith('C03-') && l.type === 'uncertain')).toBe(true);
+  });
+});
+
+describe('文本节奏与环境热点（对话面板可读性）', () => {
+  const allPages = NODES.flatMap((n) => [
+    ...n.pages.map((p) => ({ node: n.id, ...p })),
+    ...(n.choices ?? []).flatMap((c) => c.pages.map((p) => ({ node: n.id, ...p })))
+  ]);
+
+  it('单页不超过一屏：全书叙述 ≤ 85 字、对白 ≤ 45 字（四章统一口径）', () => {
+    for (const p of allPages) {
+      const limit = p.speaker ? 45 : 85;
+      expect(`${p.node}:${p.text.length}<=${limit}`).toBe(`${p.node}:${Math.min(p.text.length, limit)}<=${limit}`);
+    }
+  });
+
+  it('对白占比：每一章都有足够的人声，不是整章旁白', () => {
+    for (const ch of ['C01-', 'C02-', 'C03-', 'C04-']) {
+      const pages = allPages.filter((p) => p.node.startsWith(ch));
+      const spoken = pages.filter((p) => p.speaker).length;
+      expect(`${ch}${spoken > pages.length * 0.15}`).toBe(`${ch}true`);
+    }
+  });
+
+  it('每个节点都有对白或明确动作，不是整段旁白堆着', () => {
+    for (const n of NODES) {
+      expect(n.pages.length).toBeGreaterThan(0);
+      expect(n.objective.length).toBeLessThanOrEqual(40);
+      expect(n.interactLabel.length).toBeLessThanOrEqual(10);
+    }
+    // 第四章每个节点至少有一句带说话人的台词（全章无战斗，节奏靠对话带）
+    for (const n of NODES.filter((x) => x.id.startsWith('C04-'))) {
+      const lines = [...n.pages, ...(n.choices ?? []).flatMap((c) => c.pages)].filter((p) => p.speaker);
+      expect(`${n.id}:${lines.length > 0}`).toBe(`${n.id}:true`);
+    }
+  });
+
+  it('环境热点：坐标落在所属场景内，且是只读回声（无物品/日志字段）', () => {
+    for (const h of HOTSPOTS) {
+      const b = SCENE_BOUNDS[h.scene];
+      expect(b).toBeTruthy();
+      expect(h.x).toBeGreaterThanOrEqual(b.minX);
+      expect(h.x).toBeLessThanOrEqual(b.maxX);
+      expect(h.z).toBeGreaterThanOrEqual(b.minZ);
+      expect(h.z).toBeLessThanOrEqual(b.maxZ);
+      expect(h.pages.length).toBeGreaterThan(0);
+      expect(Object.keys(h)).not.toContain('effects');
+      for (const p of h.pages) expect(p.text.length).toBeLessThanOrEqual(120);
+    }
+    // 每个有剧情的场景都至少有一处可注视的东西
+    const scenes = new Set(NODES.map((n) => n.scene));
+    const withHot = new Set(HOTSPOTS.map((h) => h.scene));
+    for (const sc of scenes) {
+      if (sc === 'quarantine' || sc === 'kitchen') continue; // 这两处由节点本身的密度撑住
+      expect(`${sc}:${withHot.has(sc)}`).toBe(`${sc}:true`);
+    }
+  });
+});
+
+describe('场景可达性（全章不变量）', () => {
+  it('相邻节点换场景时，前一个节点必须把 toScene 指到下一个节点所在场景', () => {
+    for (let i = 0; i < NODES.length - 1; i++) {
+      const cur = NODES[i];
+      const next = NODES[i + 1];
+      if (next.scene === cur.scene) continue;
+      // 否则玩家会停在上一个场景里，永远走不到下一个目标点
+      expect(`${cur.id}→${next.id}:${cur.effects.toScene ?? '无'}`)
+        .toBe(`${cur.id}→${next.id}:${next.scene}`);
+    }
+  });
+});
+
+describe('第四章 · 回执（第一幕收束）', () => {
+  it('六个节点、无战斗、无武器；场景与出生点/外框数据齐备', () => {
+    const ch4 = NODES.filter((n) => n.id.startsWith('C04-'));
+    expect(ch4).toHaveLength(6);
+    expect(ch4.some((n) => n.encounter)).toBe(false);
+    for (const n of ch4) {
+      expect(SPAWNS[n.scene]).toBeTruthy();
+      const b = SCENE_BOUNDS[n.scene];
+      expect(b).toBeTruthy();
+      expect(n.target[0]).toBeGreaterThanOrEqual(b.minX);
+      expect(n.target[0]).toBeLessThanOrEqual(b.maxX);
+      expect(n.target[1]).toBeGreaterThanOrEqual(b.minZ);
+      expect(n.target[1]).toBeLessThanOrEqual(b.maxZ);
+      expect(n.interactLabel).not.toBe('—');
+    }
+    // 第一幕在这里收束（其后是第二幕的 C05-00）
+    expect(ch4[ch4.length - 1].id).toBe('C04-05');
+    expect(NODES[NODES.indexOf(ch4[ch4.length - 1]) + 1].id).toBe('C05-00');
+  });
+
+  it('核查口径：代签与"两行一起打勾"都被拒绝，且不改变任何状态', () => {
+    const s = playUntil('C04-00');
+    const bad = completeNode(s, 'C04-00', 'sign-by-courier');
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.rejected).toBe(true);
+    expect(s.completed).not.toContain('C04-00');
+    expect(completeNode(s, 'C04-00', 'split-two').ok).toBe(true);
+
+    const t = playUntil('C04-04');
+    const bad2 = completeNode(t, 'C04-04', 'both-tick');
+    expect(bad2.ok).toBe(false);
+    expect(t.flags).not.toContain('trace-two-lines');
+    expect(completeNode(t, 'C04-04', 'one-tick').ok).toBe(true);
+    // 第二行只能留白：不写挪用，也不写已使用
+    const trace = t.log.filter((l) => l.node === 'C04-04').map((l) => l.text).join('\n');
+    expect(trace).toContain('无加工回执');
+    expect(trace).toContain('不作挪用结论');
+    expect(trace).not.toMatch(/确系挪用|贪污|已全部使用/);
+  });
+
+  it('第一幕收束但不写"解决了"：回执未齐、手续在补、调查未结', () => {
+    const s = playAll();
+    expect(s.finished).toBe(true);
+    expect(hasFlag(s, 'chapter4-done')).toBe(true);
+    expect(hasFlag(s, 'receipt-pending')).toBe(true);
+    const ch4 = s.log.filter((l) => l.node.startsWith('C04-')).map((l) => l.text).join('\n');
+    expect(ch4).toContain('固定配给手续仍在办理中');
+    expect(ch4).toContain('回执仍未补齐');
+    // 不给调查下结论、不替冯师傅表态、不给灰灰升格
+    expect(ch4).not.toMatch(/无罪|已结案|不再追究/);
+    expect(ch4).toMatch(/最终文书仍需完成程序/);
+    expect(ch4).toMatch(/未找到主人|轮班照料|物资站轮班/);
+    expect(s.log.some((l) => l.node.startsWith('C04-') && l.type === 'uncertain')).toBe(true);
+  });
+
+  it('"收到通知不是收到东西"：转录签名被如实记为不算核过', () => {
+    const s = playAll();
+    const grid = s.log.filter((l) => l.node === 'C04-05').map((l) => l.text).join('\n');
+    expect(grid).toContain('这不算核过');
+    expect(grid).toContain('复印件交留守同事');
+    const pages = NODES.find((n) => n.id === 'C04-05')!.pages.map((p) => p.text).join('\n');
+    expect(pages).toContain('收到通知，不是收到东西');
+    expect(pages).toContain('又排上了一串等着登记的人'); // 第一幕不收在一个句号上
+  });
+
+  it('v3 存档迁移到 v4：第三章打完的老档接着进第四章', () => {
+    const upTo = NODES.slice(0, NODES.findIndex((n) => n.id === 'C04-00')).map((n) => n.id);
+    const legacyV3 = JSON.stringify({
+      version: 3,
+      completed: upTo,
+      choices: {},
+      log: [],
+      flags: ['chapter3-done'],
+      itemJournal: [{ node: 'init', add: ['gloves', 'biscuit', 'vest'], remove: [] }],
+      player: { x: -0.5, z: 3.2 },
+      scene: 'obsroom',
+      finished: true
+    });
+    const restored = parseSave(legacyV3);
+    expect(restored.recovered).toBe(false);
+    expect(restored.state.version).toBe(SAVE_VERSION);
+    expect(restored.state.finished).toBe(false); // 新增章节后不再算"通关"
+    expect(currentNode(restored.state)?.id).toBe('C04-00');
+  });
+});
+
+describe('第五章 · 签过的纸（第二幕开篇）', () => {
+  it('六个节点、无战斗；场景数据齐备、目标点在界内', () => {
+    const ch5 = NODES.filter((n) => n.id.startsWith('C05-'));
+    expect(ch5).toHaveLength(6);
+    expect(ch5.some((n) => n.encounter)).toBe(false);
+    for (const n of ch5) {
+      expect(SPAWNS[n.scene]).toBeTruthy();
+      const b = SCENE_BOUNDS[n.scene];
+      expect(n.target[0]).toBeGreaterThanOrEqual(b.minX);
+      expect(n.target[0]).toBeLessThanOrEqual(b.maxX);
+      expect(n.target[1]).toBeGreaterThanOrEqual(b.minZ);
+      expect(n.target[1]).toBeLessThanOrEqual(b.maxZ);
+    }
+    expect(NODES[NODES.length - 1].id).toBe('C05-05');
+  });
+
+  it('三处"更省事"的写法都被退回，且不改变任何状态', () => {
+    const a = playUntil('C05-00');
+    expect(completeNode(a, 'C05-00', 'push-window').ok).toBe(false);
+    expect(a.flags).not.toContain('drug-returned');
+    expect(completeNode(a, 'C05-00', 'return-by-rule').ok).toBe(true);
+
+    const b = playUntil('C05-03');
+    expect(completeNode(b, 'C05-03', 'take-tonight').ok).toBe(false);
+    expect(b.flags).not.toContain('liang-joined');
+    expect(completeNode(b, 'C05-03', 'wait-handover').ok).toBe(true);
+
+    const c = playUntil('C05-05');
+    expect(completeNode(c, 'C05-05', 'overwrite').ok).toBe(false);
+    expect(c.flags).not.toContain('chapter5-done');
+    expect(completeNode(c, 'C05-05', 'keep-original').ok).toBe(true);
+  });
+
+  it('梁医生常驻同行，但不入队、不做好感度；安全区那一段不设选择', () => {
+    const s = playAll();
+    expect(hasFlag(s, 'met-liang')).toBe(true);
+    expect(hasFlag(s, 'liang-joined')).toBe(true);
+    const join = s.log.filter((l) => l.node === 'C05-03').map((l) => l.text).join('\n');
+    expect(join).toContain('不编入任何队列');
+    // 好感度/队伍一类的系统字段不存在
+    expect(Object.keys(s)).not.toContain('party');
+    expect(Object.keys(s)).not.toContain('affinity');
+    // C05-04（安全区 → 岗亭）是叙述，不给选择
+    expect(NODES.find((n) => n.id === 'C05-04')!.choices ?? []).toHaveLength(0);
+  });
+
+  it('不给自愈结论；"山线"作为待核留在日志里', () => {
+    const s = playAll();
+    const ch5 = s.log.filter((l) => l.node.startsWith('C05-'));
+    const text = ch5.map((l) => l.text).join('\n');
+    expect(text).toContain('山线');
+    expect(s.log.some((l) => l.text.includes('山线') && l.type === 'uncertain')).toBe(true);
+    expect(hasFlag(s, 'shanxian-pending')).toBe(true);
+    expect(text).not.toMatch(/确认自愈|已痊愈|具有免疫|可以解除隔离/);
+    expect(text).toContain('未取得任何痊愈或免疫结论');
+    // 系统分类 ≠ 病情，这句口径必须在
+    expect(text).toContain('指系统分类，不指病情');
+    // 网门那条线只登记查询，不下死亡结论
+    expect(text).toContain('无逐人去向');
+    expect(text).not.toMatch(/全部死亡|都死了/);
+  });
+
+  it('v4 存档迁移到 v5：第一幕打完的老档接着进第五章', () => {
+    const upTo = NODES.slice(0, NODES.findIndex((n) => n.id === 'C05-00')).map((n) => n.id);
+    const legacy = JSON.stringify({
+      version: 4,
+      completed: upTo,
+      choices: {},
+      log: [],
+      flags: ['chapter4-done'],
+      itemJournal: [{ node: 'init', add: ['gloves', 'biscuit', 'vest'], remove: [] }],
+      player: { x: -3, z: 4 },
+      scene: 'trackside',
+      finished: true
+    });
+    const restored = parseSave(legacy);
+    expect(restored.recovered).toBe(false);
+    expect(restored.state.version).toBe(SAVE_VERSION);
+    expect(restored.state.finished).toBe(false);
+    expect(currentNode(restored.state)?.id).toBe('C05-00');
   });
 });
 

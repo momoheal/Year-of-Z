@@ -372,7 +372,7 @@ function refreshTaskCard(): void {
     $('task-title').textContent = `${node.id} · ${node.title}`;
     $('task-objective').textContent = node.objective;
   } else {
-    $('task-title').textContent = '第一章 · 完';
+    $('task-title').textContent = '第二幕 · 待续';
     $('task-objective').textContent = '可查看日志、重玩本章或进入工坊试作。';
   }
   const done = $('task-done');
@@ -416,6 +416,7 @@ function updateTaskGuide(): void {
 
 function openDialog(node: NodeDef): void {
   session = { node, pages: node.pages, idx: 0, phase: 'pages' };
+  world.setCompanionHalt(true);   // 说话的时候同行者站定，转头看着你
   $('dialog').classList.remove('hidden');
   $('interact-hint').classList.add('hidden');
   $('btn-interact-touch').classList.add('hidden');
@@ -424,6 +425,7 @@ function openDialog(node: NodeDef): void {
 
 function closeDialog(): void {
   session = null;
+  world.setCompanionHalt(false);
   $('dialog').classList.add('hidden');
 }
 
@@ -537,6 +539,7 @@ function finalizeDialog(): void {
     sceneTransition(r.toScene);
   }
   // 下一节点若是自动段落或遭遇战，不需要玩家再跑一趟
+  if (!r.toScene) world.setCompanion(state.flags.includes('liang-joined'), state.scene);
   if (!r.finishedNow) setTimeout(() => maybeAutoNode(), r.toScene ? 1500 : 700);
   if (r.finishedNow) {
     setTimeout(() => {
@@ -558,6 +561,7 @@ function sceneTransition(to: SceneId): void {
     const spawn = SPAWNS[to];
     state.player = { x: spawn.x, z: spawn.z };
     world.setScene(to, spawn);
+    world.setCompanion(state.flags.includes('liang-joined'), to, spawn);
     world.setLightMode(state.lightMode, autoLight(state));
     refreshTaskCard();
     saveNow();
@@ -601,13 +605,13 @@ function armNewGame(): void {
 }
 
 /**
- * 试玩入口：把一、二章按默认选择补全，直接从第三章开始（`?jump=fight` 则直接进厨房开打）。
+ * 试玩入口：把前面几章按默认选择补全，直接从指定节点开始
+ * （`?jump=c3` / `?jump=fight` / `?jump=c4`）。
  * 只用于试玩与回归，不改变正式流程：补全的进度与正常通关写入的是同一套存档结构。
  */
-function jumpToChapter3(toFight: boolean): void {
+function jumpToNode(stopAt: string, tip: string): void {
   localStorage.removeItem(SAVE_KEY);
   state = createNewState();
-  const stopAt = toFight ? 'C03-03' : 'C03-00';
   for (const n of NODES) {
     if (n.id === stopAt) break;
     const r = completeNode(state, n.id, n.choices?.find((c) => !c.rejected)?.id);
@@ -617,8 +621,15 @@ function jumpToChapter3(toFight: boolean): void {
   const spawn = SPAWNS[state.scene];
   state.player = { x: spawn.x, z: spawn.z };
   startGame(true);
-  toast(toFight ? '试玩：直接进入东街厨房的那一刻。' : '试玩：第三章开始，一、二章已按默认选择补全。', 4200);
+  toast(tip, 4200);
 }
+
+const JUMPS: Record<string, { node: string; tip: string }> = {
+  c3: { node: 'C03-00', tip: '试玩：第三章开始，一、二章已按默认选择补全。' },
+  fight: { node: 'C03-03', tip: '试玩：直接进入东街厨房的那一刻。' },
+  c4: { node: 'C04-00', tip: '试玩：第四章《回执》开始，前三章已按默认选择补全。' },
+  c5: { node: 'C05-00', tip: '试玩：第五章《签过的纸》开始，第一幕已按默认选择补全。' }
+};
 
 function startGame(fresh: boolean): void {
   $('title-screen').classList.add('hidden');
@@ -629,6 +640,7 @@ function startGame(fresh: boolean): void {
   }
   const spawn = fresh ? SPAWNS[state.scene] : SPD(state);
   world.setScene(state.scene, spawn);
+  world.setCompanion(state.flags.includes('liang-joined'), state.scene, spawn);
   world.syncFromState(state);
   refreshTaskCard();
   started = true;
@@ -1004,7 +1016,8 @@ function updateCombatGuide(): void {
 function syncCombatHud(): void {
   const hud = $('combat-hud');
   const touch = $('combat-touch');
-  if (!combat || combat.outcome === 'fail') {
+  // 事后段落一开始就收起战斗 HUD：它不该压在对话上面（YZ-14 e2e 里被点击拦截暴露）
+  if (!combat || combat.outcome === 'fail' || session) {
     hud.classList.add('hidden');
     touch.classList.add('hidden');
     return;
@@ -1174,7 +1187,16 @@ function bindUI(): void {
   $('btn-continue').addEventListener('click', () => { audio.unlock(); startGame(false); });
   $('btn-jump-ch3').addEventListener('click', () => {
     audio.unlock();
-    jumpToChapter3(new URLSearchParams(location.search).get('jump') === 'fight');
+    const j = JUMPS[new URLSearchParams(location.search).get('jump') ?? ''] ?? JUMPS.c3;
+    jumpToNode(j.node, j.tip);
+  });
+  $('btn-jump-ch4').addEventListener('click', () => {
+    audio.unlock();
+    jumpToNode(JUMPS.c4.node, JUMPS.c4.tip);
+  });
+  $('btn-jump-ch5').addEventListener('click', () => {
+    audio.unlock();
+    jumpToNode(JUMPS.c5.node, JUMPS.c5.tip);
   });
   $('btn-webgl-retry').addEventListener('click', () => location.reload());
   $('taskcard').addEventListener('click', () => {
@@ -1186,9 +1208,70 @@ function bindUI(): void {
   });
 }
 
+/**
+ * YZ-14 · e2e 钩子：只在 URL 带 `?e2e=1` 时挂载，正式流程不受影响。
+ * 提供的都是"读状态"与"站到目标点"这类脚手架——推进剧情、拾取、格挡、挥击
+ * 仍然走真实 UI 与键盘事件，验收的是运行时行为而不是内部函数。
+ */
+function installE2EHooks(): void {
+  const api = {
+    node: () => currentNode(state)?.id ?? null,
+    scene: () => state.scene,
+    completed: () => [...state.completed],
+    flags: () => [...state.flags],
+    logText: () => state.log.map((l) => l.text).join('\n'),
+    inDialog: () => !!session,
+    /** 站到当前任务目标点（省去跑图，交互与判定仍是真实的） */
+    toTarget: () => {
+      const n = currentNode(state);
+      if (!n || !n.target || n.scene !== state.scene) return false;
+      world.setPlayerPos(n.target[0], n.target[1]);
+      state.player = { x: n.target[0], z: n.target[1] };
+      return true;
+    },
+    /** 战斗内：站到手边那件东西旁（椅子 → 刀），其余仍由按键完成 */
+    toPickup: () => {
+      if (!combat) return false;
+      const pick = combatPickup(combat);
+      if (!pick) return false;
+      world.setPlayerPos(pick.x, pick.z);
+      return true;
+    },
+    teleport: (x: number, z: number) => { world.setPlayerPos(x, z); },
+    companion: () => world.getCompanion(),
+    /** 只切画面（不动剧情状态）：用于逐个场景的建景冒烟测试 */
+    showScene: (id: string) => {
+      const sid = id as typeof state.scene;
+      const spawn = SPAWNS[sid];
+      if (!spawn) return false;
+      world.setScene(sid, spawn);
+      return true;
+    },
+    combat: () => (combat
+      ? {
+        phase: combat.phase,
+        outcome: combat.outcome,
+        enemy: combat.enemy.state,
+        hasChair: combat.hasChair,
+        hasKnife: combat.hasKnife,
+        chairTaken: combat.chairTaken,
+        knifeTaken: combat.knifeTaken,
+        chairHp: combat.chairHp,
+        grabs: combat.grabs,
+        retries: combat.retries,
+        elapsed: combat.elapsed,
+        prompt: combat.prompt
+      }
+      : null),
+    enemyPos: () => (combat ? { x: combat.enemy.x, z: combat.enemy.z } : null),
+    playerPos: () => world.playerPos()
+  };
+  (window as unknown as { __yoz: typeof api }).__yoz = api;
+}
+
 function boot(): void {
   bootTitle();
-  // ?jump=c3 / ?jump=fight：试玩直达（见 jumpToChapter3）
+  // ?jump=c3 / ?jump=fight / ?jump=c4 / ?jump=c5：试玩直达（见 jumpToNode）
   const jump = new URLSearchParams(location.search).get('jump');
   initToolbar();
   initSettings();
@@ -1208,7 +1291,9 @@ function boot(): void {
   // 首次操作解锁音频（浏览器自动播放限制）
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
   window.addEventListener('keydown', () => audio.unlock(), { once: true });
-  if (jump === 'c3' || jump === 'fight') jumpToChapter3(jump === 'fight');
+  if (new URLSearchParams(location.search).get('e2e') === '1') installE2EHooks();
+  const jumpDef = jump ? JUMPS[jump] : undefined;
+  if (jumpDef) jumpToNode(jumpDef.node, jumpDef.tip);
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }
 
