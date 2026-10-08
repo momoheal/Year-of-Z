@@ -518,6 +518,20 @@ function buildGridoffice(g: THREE.Group, ctx: SceneryCtx): void {
     box(g, 0.07, 0.76, 0.07, C.metalDark, -1.4 + lx, 0.38, -1.6 + lz);
   }
   textBoard(g, 0.56, 0.7, paperTexture('转移登记表', 6), -1.6, 0.82, -1.6).rotation.x = -Math.PI / 2;
+  // 小孩的蜡笔画：碗比人还大（C04-05）
+  const drawing = canvasTexture(160, 120, (c) => {
+    c.fillStyle = '#efe6d4'; c.fillRect(0, 0, 160, 120);
+    c.fillStyle = '#d4b24a';
+    c.beginPath(); c.ellipse(88, 82, 56, 26, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#8a6a28'; c.lineWidth = 3;
+    c.beginPath(); c.ellipse(88, 82, 56, 26, 0, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = '#6a5344';
+    c.fillRect(28, 58, 8, 22);
+    c.beginPath(); c.arc(32, 54, 5, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#5a5348'; c.font = '12px "Noto Sans CJK SC", sans-serif';
+    c.fillText('碗', 8, 18);
+  });
+  textBoard(g, 0.44, 0.32, drawing, -0.85, 0.83, -1.28).rotation.x = -Math.PI / 2;
   box(g, 0.3, 0.1, 0.22, mat(0x4d5259), -0.6, 0.86, -1.9);
   cyl(g, 0.05, 0.12, mat(0x6f7a80), -0.5, 0.87, -1.3);
   aoPatch(g, 2.6, 1.8, -1.4, -1.6, 0.4);
@@ -552,6 +566,11 @@ function buildGridoffice(g: THREE.Group, ctx: SceneryCtx): void {
   zhao.position.set(-1.4, 0, -2.6);
   zhao.rotation.y = 0.1;
   g.add(zhao);
+  // 马工程师对着片区图改接驳线
+  const ma = makePerson({ coat: 0x4a5e6a, pants: 0x3a4048, skin: 0xcbb39a });
+  ma.position.set(3.0, 0, -2.7);
+  ma.rotation.y = Math.PI;
+  g.add(ma);
   dust(g, ctx, 26, { x: [-4, 4], y: [0.4, 2.4], z: [-3, 4] });
 }
 
@@ -634,6 +653,7 @@ function buildRecvstation(g: THREE.Group, ctx: SceneryCtx): void {
   }
   textBoard(g, 0.5, 0.62, paperTexture('回执 · 交接联', 6), -2.35, 0.82, 1.8).rotation.x = -Math.PI / 2;
   textBoard(g, 0.42, 0.54, paperTexture('更正说明', 4), -1.9, 0.82, 1.9).rotation.x = -Math.PI / 2;
+  textBoard(g, 0.48, 0.36, paperTexture('接驳图 · 并线', 4), -2.05, 0.82, 1.45).rotation.x = -Math.PI / 2;
   // 排队线与两把等候椅
   box(g, 3.6, 0.02, 0.1, mat(0xb8a24e), 1.8, 0.02, -1.6).castShadow = false;
   for (const cx2 of [3.8, 4.6]) {
@@ -652,6 +672,11 @@ function buildRecvstation(g: THREE.Group, ctx: SceneryCtx): void {
   clerk.position.set(1.8, 0, -2.6);
   clerk.rotation.y = 0;
   g.add(clerk);
+  // 马工程师带着那张没有「签收」栏的接驳图
+  const ma = makePerson({ coat: 0x4a5e6a, pants: 0x3a4048, skin: 0xcbb39a });
+  ma.position.set(-0.4, 0, 2.2);
+  ma.rotation.y = -0.6;
+  g.add(ma);
   dust(g, ctx, 30, { x: [-5, 5], y: [0.4, 2.4], z: [-3, 4] });
 }
 

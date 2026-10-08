@@ -57,7 +57,9 @@ const ITEM_ICONS: Record<string, typeof Package> = {
   'transfer-slip': ClipboardList,
   'obs-card': ClipboardList,
   'statement-copy': ScrollText,
-  'list-22': ListChecks
+  'list-22': ListChecks,
+  // 等待日奶粉（不另开关卡，只在第二章出发前入包）
+  'formula-slip': FileText
 };
 
 // ---------------------------------------------------------------- 音频（Web Audio 合成，无外部资源）
