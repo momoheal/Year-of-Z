@@ -16,7 +16,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build   # 含 tsc --noEmit 类型检查
-      - run: npm test        # vitest 叙事内核不变量
+      # vitest：失败时把尾部输出接到注解上（日志下载常受限，注解在 API 里始终可读）
+      - name: Run tests
+        run: |
+          set +e
+          npm test > test.log 2>&1
+          STATUS=$?
+          set -e
+          cat test.log
+          if [ $STATUS -ne 0 ]; then
+            echo "::error title=vitest-tail::$(tail -c 2500 test.log | tr '\n' '~')"
+          fi
+          exit $STATUS
 
   e2e:
     needs: check

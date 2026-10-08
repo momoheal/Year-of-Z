@@ -5,7 +5,9 @@
  *   1) 第一章：开局 → C01-00 → 背包 → 存档 / 读档 → 移动端布局；
  *   2) 第三章对话流（?jump=c3&e2e=1）：C03-00…C03-05 六节点，断言「咬伤→袭击」更正与二十二人名单；
  *   3) 厨房遭遇战（?jump=fight&e2e=1）：拿椅子 → 挡两下散架 → 到备餐台拿刀 → 挡 → 挥 → 进 C03-04；
- *      另跑一次失败重来路径（站着不动被按住 → 「再来一次」→ 战斗重置）。
+ *      另跑一次失败重来路径（站着不动被按住 → 「再来一次」→ 战斗重置）；
+ *   4) 域外探索独立切片（zone.html）：标题 → 出门 → 走路掉体力 → 面板与暂停 →
+ *      天亮记录 → 到家结算 → 登记两个选项 → 再来一夜。
  * 第 2、3 段用页面注入的 `window.__yoz`（仅 ?e2e=1 时挂载）做站位与读状态，
  * 推进剧情、拾取、格挡、挥击一律走真实 UI / 键盘事件。
  *
@@ -446,6 +448,83 @@ try {
   const overflow = await mp.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   ok(!overflow, '移动端无横向溢出');
   await mp.screenshot({ path: `${SHOT_DIR}/05-mobile.png` });
+
+  // ---------- 域外探索（独立切片 · zone.html） ----------
+  const zp = await mkPage({ viewport: { width: 1280, height: 720 } });
+  await zp.goto(new URL('zone.html?e2e=1', BASE).href, { waitUntil: 'networkidle' });
+  await zp.waitForTimeout(1600);
+  ok(await zp.locator('#title-screen:visible').count() === 1, '域外探索：标题画面在');
+  ok(await zp.locator('#webgl-error:visible').count() === 0, '域外探索：WebGL 正常');
+  await zp.screenshot({ path: `${SHOT_DIR}/10-zone-title.png` });
+
+  await zp.click('#btn-start');
+  await zp.waitForTimeout(900);
+  const zclock0 = await zp.locator('#clock').textContent();
+  ok(/^20:0\d$/.test(zclock0 ?? ''), `域外探索：20:00 出门（${zclock0}）`);
+  ok((await zp.locator('#gear').textContent() ?? '').includes('撬棍'), '域外探索：手上有撬棍');
+  ok(await zp.locator('#home-dist:visible').count() === 1, '域外探索：回家指引在');
+
+  // 走路 + 疾跑：时钟往前走、体力往下掉
+  await zp.keyboard.down('KeyW');
+  await zp.keyboard.down('Shift');
+  await zp.waitForTimeout(1500);
+  await zp.keyboard.up('Shift');
+  await zp.keyboard.up('KeyW');
+  const zsta = Number(await zp.locator('#v-sta-n').textContent());
+  ok(zsta < 100, `域外探索：疾跑消耗体力（剩 ${zsta}）`);
+
+  // 面板开关与暂停
+  await zp.click('#btn-bag');
+  await zp.waitForTimeout(300);
+  ok(await zp.locator('#bag-grid .bag-item').count() >= 3, '域外探索：背包占了格（至少三块积木）');
+  const zc1 = await zp.locator('#clock').textContent();
+  await zp.waitForTimeout(900);
+  ok((await zp.locator('#clock').textContent()) === zc1, '域外探索：面板打开时两根钟停住');
+  await zp.screenshot({ path: `${SHOT_DIR}/11-zone-bag.png` });
+  await zp.click('#btn-bag');
+
+  await zp.click('#btn-log');
+  await zp.waitForTimeout(300);
+  const zlog = await zp.locator('#log-body').textContent();
+  ok(/撤离路线/.test(zlog ?? '') && /地道/.test(zlog ?? ''), '域外探索：任务面板有撤离路线表');
+  await zp.click('#btn-log');
+  await zp.click('#btn-map');
+  await zp.waitForTimeout(300);
+  ok(await zp.locator('#minimap:visible').count() === 1, '域外探索：地图画得出来');
+  await zp.screenshot({ path: `${SHOT_DIR}/12-zone-map.png` });
+  await zp.click('#btn-map');
+
+  // 天亮法则：把时钟推到 05:30 之前，走过去
+  await zp.evaluate(() => { const s = window.__zone.state(); s.zombies = []; s.militia = []; s.player.hp = 100; s.gameMin = 569.9; });
+  // 轮询等天亮那一刻：不赌 HUD 的刷新节拍（0.12s 一次）
+  let dawned = false;
+  for (let i = 0; i < 40 && !dawned; i++) {
+    dawned = await zp.evaluate(() => window.__zone.state().flags.recorded === 1);
+    if (!dawned) await zp.waitForTimeout(100);
+  }
+  await zp.waitForTimeout(400);
+  ok(dawned, '域外探索：在街上被记录（当日核酸作废）');
+  ok((await zp.locator('#phase-tag').textContent()) === '天亮', '域外探索：05:30 之后标签变天亮');
+  await zp.screenshot({ path: `${SHOT_DIR}/13-zone-dawn.png` });
+
+  // 到家 → 结算 → 登记
+  await zp.evaluate(() => { const s = window.__zone.state(); s.gameMin = 400; s.player.x = -30; s.player.z = 20; });
+  await zp.waitForTimeout(700);
+  ok(await zp.locator('#end-screen:visible').count() === 1, '域外探索：走进门廊灯即结算');
+  const zend = await zp.locator('#end-body').textContent();
+  ok(/心神/.test(zend ?? '') && /诚实兑现/.test(zend ?? ''), '域外探索：结算档案含心神与诚实兑现');
+  ok(await zp.locator('#end-register:visible').count() === 1, '域外探索：登记给出两个选项');
+  await zp.screenshot({ path: `${SHOT_DIR}/14-zone-end.png` });
+  await zp.click('#btn-reg-honest');
+  await zp.waitForTimeout(400);
+  ok((await zp.locator('#end-body').textContent() ?? '').includes('照实写'), '域外探索：照实写会被如实记下');
+
+  // 再来一夜：时钟回到 20:00
+  await zp.click('#btn-end-again');
+  await zp.waitForTimeout(700);
+  ok((await zp.locator('#clock').textContent()) === '20:00', '域外探索：再来一夜从 20:00 重开');
+  ok(await zp.locator('#end-screen.hidden').count() === 1, '域外探索：结算画面收起');
+  await zp.close();
 
   ok(errors.length === 0, `无浏览器错误（${errors.length}）`);
   for (const e of errors.slice(0, 5)) console.log('  console:', e);

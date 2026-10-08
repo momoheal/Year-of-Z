@@ -578,6 +578,12 @@ function sceneTransition(to: SceneId): void {
 
 // ---------------------------------------------------------------- 标题与开始
 
+function initZoneLink(): void {
+  // 域外探索是独立页面：独立入口、独立存档键（yoz.zone.v1），与本章状态严格隔离
+  const btn = document.getElementById('btn-zone');
+  if (btn) btn.addEventListener('click', () => { window.location.href = './zone.html'; });
+}
+
 function bootTitle(): void {
   const savedRaw = localStorage.getItem(SAVE_KEY);
   const parsed = parseSave(savedRaw);
@@ -1273,6 +1279,7 @@ function installE2EHooks(): void {
 
 function boot(): void {
   bootTitle();
+  initZoneLink();
   // ?jump=c3 / ?jump=fight / ?jump=c4 / ?jump=c5：试玩直达（见 jumpToNode）
   const jump = new URLSearchParams(location.search).get('jump');
   initToolbar();

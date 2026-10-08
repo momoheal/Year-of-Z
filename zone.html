@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>域外探索 · 长夜与八点</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312161d'/%3E%3Crect x='6' y='8' width='20' height='5' rx='1' fill='%23d9a05b'/%3E%3Crect x='9' y='13' width='4' height='3' fill='%23d9a05b'/%3E%3Crect x='18' y='13' width='4' height='3' fill='%23d9a05b'/%3E%3Crect x='6' y='19' width='20' height='5' rx='1' fill='%238f979e'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="app">
+    <div id="game"></div>
+
+    <div id="hud">
+      <!-- 顶栏：双时钟 -->
+      <header id="topbar">
+        <div id="brand">
+          <span class="brand-title">域外探索</span>
+          <span class="brand-sub">长夜与八点 · 单夜切片</span>
+        </div>
+
+        <div id="clockbox">
+          <div id="clock">20:00</div>
+          <div id="dawn-in">距天亮 12:40</div>
+          <div id="phase-tag">夜里</div>
+        </div>
+
+        <nav id="toolbar">
+          <button id="btn-bag" class="tb-btn" title="背包（B）">包</button>
+          <button id="btn-log" class="tb-btn" title="任务与路线（L）">务</button>
+          <button id="btn-map" class="tb-btn" title="地图（M）">图</button>
+          <button id="btn-sound" class="tb-btn" title="静音">音</button>
+          <button id="btn-menu" class="tb-btn" title="设置（Esc）">≡</button>
+        </nav>
+      </header>
+
+      <!-- 左侧：状态 -->
+      <aside id="vitals">
+        <div class="v-row"><span class="v-key">血</span><div class="v-bar"><i id="v-hp" class="v-fill hp"></i></div><span id="v-hp-n" class="v-num">100</span></div>
+        <div class="v-row"><span class="v-key">心</span><div class="v-bar"><i id="v-san" class="v-fill san"></i></div><span id="v-san-n" class="v-num">100</span></div>
+        <div class="v-row"><span class="v-key">力</span><div class="v-bar"><i id="v-sta" class="v-fill sta"></i></div><span id="v-sta-n" class="v-num">100</span></div>
+        <div class="v-row"><span class="v-key">电</span><div class="v-bar"><i id="v-bat" class="v-fill bat"></i></div><span id="v-bat-n" class="v-num">100</span></div>
+        <div id="wounds"></div>
+        <div id="gear">—</div>
+      </aside>
+
+      <!-- 左上：任务轨（乐高挂牌） -->
+      <aside id="taskrail"></aside>
+
+      <!-- 回家指引 -->
+      <div id="home-guide"><span id="home-arrow">➤</span><span id="home-dist">—</span></div>
+
+      <!-- 交互提示 -->
+      <div id="interact" class="hidden">
+        <div id="i-head"><span class="hint-key">E</span><span id="i-label">—</span></div>
+        <div id="i-hint">长按</div>
+        <div id="i-bar"><i id="i-fill"></i></div>
+      </div>
+
+      <!-- 快捷消耗品 -->
+      <div id="quickbar"></div>
+
+      <div id="noiseflash" class="hidden"></div>
+
+      <!-- 面板：背包（占格） -->
+      <section id="panel-bag" class="panel hidden">
+        <div class="panel-head"><h2>背包 · 占格底板</h2><button class="panel-close" data-close="panel-bag">×</button></div>
+        <div id="bag-grid"></div>
+        <p class="panel-note" id="bag-note">装不下就丢，丢下的会留在原地。点一下是使用，长按是丢下。</p>
+      </section>
+
+      <!-- 面板：任务与撤离路线 -->
+      <section id="panel-log" class="panel hidden">
+        <div class="panel-head"><h2>任务与撤离路线</h2><button class="panel-close" data-close="panel-log">×</button></div>
+        <div id="log-body"></div>
+      </section>
+
+      <!-- 面板：地图 -->
+      <section id="panel-map" class="panel hidden">
+        <div class="panel-head"><h2>地图 · 回家的路</h2><button class="panel-close" data-close="panel-map">×</button></div>
+        <canvas id="minimap" width="560" height="400"></canvas>
+        <div id="map-legend"></div>
+      </section>
+
+      <!-- 面板：地点动作 -->
+      <section id="panel-spot" class="panel hidden">
+        <div class="panel-head"><h2 id="spot-title">—</h2><button class="panel-close" data-close="panel-spot">×</button></div>
+        <div id="spot-body"></div>
+      </section>
+
+      <!-- 面板：设置 -->
+      <section id="panel-menu" class="panel hidden">
+        <div class="panel-head"><h2>设置</h2><button class="panel-close" data-close="panel-menu">×</button></div>
+        <div class="set-row"><label for="z-zoom">视野缩放</label><input id="z-zoom" type="range" min="62" max="190" value="100" /></div>
+        <div class="set-row"><label for="z-vol">音量</label><input id="z-vol" type="range" min="0" max="100" value="60" /></div>
+        <div class="set-row"><label>这一夜</label><button id="btn-restart" class="danger">重开一夜</button></div>
+        <div class="set-help">
+          <h3>操作</h3>
+          <p>桌面：WASD 移动，Shift 疾跑，Ctrl 潜行，鼠标瞄准，左键挥击，右键开枪，E 长按交互/搜刮/撬门，Q 扔空罐，F 手电，B 背包，L 任务，M 地图，滚轮缩放，Esc 关闭。</p>
+          <p>快捷：1 绷带 · 2 抗生素 · 3 电池 · 4 吃的。</p>
+          <p>触屏：左下摇杆移动，右下按键交互/挥击/扔罐/手电。</p>
+          <h3>两根钟</h3>
+          <p>05:30 天亮：视野倍增、躲藏失效，在街上会被记录，当日核酸作废。06:00 强制收摊。</p>
+          <p>灯下静立回心神，黑地里走掉心神；心神低了画面里会出现不存在的东西——文字层不会替你判断。</p>
+        </div>
+      </section>
+
+      <!-- 触屏 -->
+      <div id="touch" class="hidden">
+        <div id="joystick"><div id="joystick-knob"></div></div>
+        <div id="touch-btns">
+          <button id="t-swing">挥</button>
+          <button id="t-e">E</button>
+          <button id="t-throw">罐</button>
+          <button id="t-light">灯</button>
+        </div>
+      </div>
+
+      <div id="toast" class="hidden"></div>
+      <div id="fade" class="hidden"><span id="fade-caption"></span></div>
+
+      <!-- 标题 -->
+      <div id="title-screen">
+        <div class="title-inner">
+          <div class="title-tag">与《Z年纪事》共享世界观 · 独立入口</div>
+          <h1>域外探索</h1>
+          <div class="title-ch">长夜与八点 · 单夜切片 · 20:00 → 05:30</div>
+          <p class="title-desc">白天属于登记与核酸，夜晚属于撬棍与地道。<br/>每天晚上出门搜刮，天亮前回家，八点前排进核酸的队伍——<br/>这是你继续住在这个小区的唯一方式。</p>
+          <div class="title-actions">
+            <button id="btn-start" class="primary">出门</button>
+            <button id="btn-continue" class="hidden">继续这一夜</button>
+          </div>
+          <p class="title-note">避战优先 · 时间即命 · 噪音即敌 · 文字层不撒谎</p>
+          <div class="title-hint">
+            <b>一夜的建议走法</b>
+            20:00 商业街（搜刮主课堂）→ 21:00 主干道看三方互咬 → 22:00 宵禁 →
+            22:30 仓库区（重尸把守）→ 23:00 快尸出巢 → 23:30 定居点交货包扎 → 选一条路回家。
+          </div>
+        </div>
+      </div>
+
+      <!-- 结算 -->
+      <div id="end-screen" class="hidden">
+        <div class="title-inner">
+          <div id="end-tag" class="title-tag">这一夜的档案</div>
+          <h2 id="end-title">—</h2>
+          <p id="end-quote" class="end-quote">—</p>
+          <div id="end-body"></div>
+          <div id="end-register" class="hidden">
+            <p class="reg-q">登记：今晚的去向，照实写，还是照四十填？</p>
+            <div class="title-actions">
+              <button id="btn-reg-honest" class="primary">照实写</button>
+              <button id="btn-reg-fake">照四十填</button>
+            </div>
+          </div>
+          <div class="title-actions" id="end-actions">
+            <button id="btn-end-log">查看日志</button>
+            <button id="btn-end-again" class="danger">再来一夜</button>
+            <button id="btn-end-back">回正传</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="webgl-error" class="hidden">
+        <p>当前浏览器无法创建 WebGL 环境，画面无法显示。</p>
+        <button id="btn-webgl-retry">重试</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/zone/zmain.ts"></script>
+</body>
+</html>
