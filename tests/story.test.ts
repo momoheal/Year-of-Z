@@ -538,6 +538,52 @@ describe('第五章 · 签过的纸（第二幕开篇）', () => {
   });
 });
 
+describe('正文改写后的可玩对齐（不增节点、不升存档）', () => {
+  it('等待日奶粉只在第二章出发前点明，不另开可玩关卡', () => {
+    expect(NODES.filter((n) => n.id.startsWith('C04-'))).toHaveLength(6);
+    expect(NODES.filter((n) => n.id.startsWith('C05-'))).toHaveLength(6);
+    expect(NODES.some((n) => /奶粉/.test(n.title))).toBe(false);
+    const n = NODES.find((x) => x.id === 'C02-00')!;
+    const t = n.pages.map((p) => p.text).join('\n');
+    expect(t).toContain('方阿姨');
+    expect(t).toContain('不是普通的那种');
+    expect(t).toContain('林悦');
+    expect(t).toContain('没有奶粉');
+    expect(n.effects.addItems).toContain('formula-slip');
+    const s = playAll();
+    expect(hasItem(s, 'formula-slip')).toBe(true);
+    expect(s.log.some((l) => l.text.includes('抗过敏奶粉') && l.text.includes('不入本趟板车'))).toBe(true);
+  });
+
+  it('马工程师进入第四、五章：运力图画对了，收药栏是空的', () => {
+    const pagesOf = (id: string) => {
+      const n = NODES.find((x) => x.id === id)!;
+      return [...n.pages, ...(n.choices ?? []).flatMap((c) => c.pages)];
+    };
+    const c4 = pagesOf('C04-05').map((p) => `${p.speaker ?? ''}${p.text}`).join('\n');
+    expect(c4).toContain('马工程师');
+    expect(c4).toContain('普通乘客');
+    expect(c4).toContain('碗画得比人还大');
+    expect(c4).toContain('还能煮两天');
+    const c50 = pagesOf('C05-00').map((p) => p.text).join('\n');
+    expect(c50).toContain('谁能伸手收药');
+    const c55 = pagesOf('C05-05').map((p) => p.text).join('\n');
+    expect(c55).toContain('不是病');
+    expect(c55).toContain('那两天已经过了');
+    const s = playAll();
+    const all = s.log.map((l) => l.text).join('\n');
+    expect(all).toContain('不是病');
+    expect(all).toContain('漏计三名透析乘客');
+  });
+
+  it('观察日带回咬伤谣言与方阿姨那条通报，仍不写自愈', () => {
+    const t = NODES.find((x) => x.id === 'C03-05')!.pages.map((p) => p.text).join('\n');
+    expect(t).toContain('被咬了');
+    expect(t).toContain('方阿姨');
+    expect(t).not.toMatch(/自愈|痊愈|不会感染/);
+  });
+});
+
 describe('叙事验收事实（对照 doc/24）', () => {
   it('日志包含必须呈现的口径；不出现被禁止的结论', () => {
     const s = playAll();

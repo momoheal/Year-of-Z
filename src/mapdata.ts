@@ -404,7 +404,16 @@ export const HOTSPOTS: HotspotDef[] = [
     scene: 'gridoffice', x: 2.4, z: -3.2, label: '看看片区图',
     pages: [
       { text: '整片宿舍被一支红笔框起来，框线画得很用力，纸背都起了毛。' },
-      { text: '框里没有写人名。' }
+      { text: '框里没有写人名。旁边新贴了一张：两条线并成一条。' },
+      { text: '并线的人把运力写对了。谁能伸手收药，这一栏是空的。' }
+    ]
+  },
+  {
+    id: 'hot-grid-drawing',
+    scene: 'gridoffice', x: -0.85, z: -1.28, label: '看看那张画',
+    pages: [
+      { text: '蜡笔把碗涂得发亮。碗沿高出小人的头顶一截。' },
+      { text: '纸角写着日期。没有署名。' }
     ]
   },
   {
@@ -429,6 +438,14 @@ export const HOTSPOTS: HotspotDef[] = [
     pages: [
       { text: '柜面上按片区贴着标签，最下面一格没有标签，塞得最满。' },
       { text: '抽屉轨道上有一层新灰：拉出来过很多次，又一直没人整理。' }
+    ]
+  },
+  {
+    id: 'hot-recv-sketch',
+    scene: 'recvstation', x: -2.05, z: 1.45, label: '看看接驳图',
+    pages: [
+      { text: '两条线并成一条。边上用铅笔写：总体运力没有减少。' },
+      { text: '图例里没有「签收」这一栏。' }
     ]
   },
   {
