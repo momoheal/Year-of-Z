@@ -17,6 +17,16 @@ combo kills, no pursuit — only backing away, blocking, and a knife that isn't 
 
 ## ✨ Features
 
+- **Zone Exploration · *Long Night and Eight O'clock*** (a standalone slice at `zone.html`): the same
+  world, another street, seen at night. Scavenge before dawn and be back in the nucleic-acid queue by
+  eight. Two clocks (20:00 out / 05:30 dawn / 08:00 swab), **noise as the enemy** (levels 1–5 drawn as
+  brick ripple rings on the ground), six zombie types plus hallucinations, a militia faction that
+  fights zombies as well as survivors (shots draw more zombies → the squad gets swarmed → loot drops),
+  a **body-run instead of permadeath** (knocked out = drop your bag, lose 3 hours, walk back for it),
+  two medical ledgers (bandages stop bleeding, antibiotics stop infection), a grid inventory
+  (overloading slows you) and a **three-route extraction table**. **Items and quests are all brickified**:
+  footprint = stud count, contracts = colour-coded tags on a board. Separate entry and separate save
+  key (`yoz.zone.v1`), strictly isolated from the chapter state. Design doc: [doc/33](doc/33-域外探索-设计.md).
 - **30 narrative nodes across 3 chapters**: Ch.1 (12) gate handover → side door → warehouse choice →
   qualified pallets → a night in quarantine → homecoming; Ch.2 (12) handcart, underpass, window
   handover at Liu'anli, the sack lost on the steel plate; Ch.3 (6) departure → seventeen bowls →
