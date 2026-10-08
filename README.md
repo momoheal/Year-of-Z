@@ -99,7 +99,7 @@ npm run dev        # 开发服务器 → http://localhost:5173
 
 ## 🛠 技术栈
 
-TypeScript · Vite 5 · three.js 0.169 · cannon-es · lucide（图标）· vitest · Playwright（验收）
+TypeScript · Vite 5 · three.js 0.169 · cannon-es · lucide（图标）· vitest（jsdom 钉在 25.x：新版依赖 Node 22 的内部 API，而仓库声明支持 Node ≥ 18）· Playwright（验收）
 无服务端、无数据库、无 CDN 依赖——整个游戏是一个纯静态站点。
 
 ## 📁 项目结构
