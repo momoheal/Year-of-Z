@@ -495,10 +495,16 @@ try {
   await zp.click('#btn-map');
 
   // 天亮法则：把时钟推到 05:30 之前，走过去
-  await zp.evaluate(() => { const s = window.__zone.state(); s.zombies = []; s.militia = []; s.player.hp = 100; s.gameMin = 569.95; });
-  await zp.waitForTimeout(800);
+  await zp.evaluate(() => { const s = window.__zone.state(); s.zombies = []; s.militia = []; s.player.hp = 100; s.gameMin = 569.9; });
+  // 轮询等天亮那一刻：不赌 HUD 的刷新节拍（0.12s 一次）
+  let dawned = false;
+  for (let i = 0; i < 40 && !dawned; i++) {
+    dawned = await zp.evaluate(() => window.__zone.state().flags.recorded === 1);
+    if (!dawned) await zp.waitForTimeout(100);
+  }
+  await zp.waitForTimeout(400);
+  ok(dawned, '域外探索：在街上被记录（当日核酸作废）');
   ok((await zp.locator('#phase-tag').textContent()) === '天亮', '域外探索：05:30 之后标签变天亮');
-  ok(await zp.evaluate(() => window.__zone.state().flags.recorded === 1), '域外探索：在街上被记录（当日核酸作废）');
   await zp.screenshot({ path: `${SHOT_DIR}/13-zone-dawn.png` });
 
   // 到家 → 结算 → 登记

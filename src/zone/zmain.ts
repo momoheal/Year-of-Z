@@ -10,8 +10,8 @@ import '../style.css';
 import './zstyle.css';
 import type * as THREE from 'three';
 import {
-  BAG_COLS, BAG_ROWS, BLOCKS, CONTAINERS, CONTRACTS, GROUNDS, HOME, ITEMS, LAMPS, MAP,
-  NOISE_LABEL, NOISE_RADIUS, ROUTES, SPOTS, dist
+  BAG_COLS, BAG_ROWS, BLOCKS, CONTAINERS, CONTRACTS, GAME_MIN_PER_SEC, GROUNDS, HOME, ITEMS,
+  LAMPS, MAP, NOISE_LABEL, NOISE_RADIUS, ROUTES, SPOTS, dist
 } from './zdata';
 import {
   ZONE_SAVE_KEY, createZone, doSpotAction, drainEvents, finishRegister, hudSnapshot, interactTarget,
@@ -301,7 +301,7 @@ function openSpot(id: string): void {
 function refreshHud(): void {
   const h = hudSnapshot(st);
   $('clock').textContent = h.clock;
-  const realLeft = Math.max(0, h.toDawn / 0.75);
+  const realLeft = Math.max(0, h.toDawn / GAME_MIN_PER_SEC); // 距天亮：按压缩比换成现实秒
   const mm = Math.floor(realLeft / 60), ss = Math.floor(realLeft % 60);
   $('dawn-in').textContent = h.toDawn > 0 ? `距天亮 ${mm}:${String(ss).padStart(2, '0')}` : '天亮了';
   const tag = $('phase-tag');
