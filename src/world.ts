@@ -21,6 +21,8 @@ import { LightRig } from './world/light';
 import { CameraRig } from './world/camera';
 import { createPhysics, addWall, removeNamedWall, stepPhysics, type PhysCtx } from './world/physics';
 import { ActorRig } from './world/actor';
+import { GuideRig } from './world/guide';
+import { AmbientRig } from './world/ambient';
 
 export type WorldEvent = NonNullable<NodeEffects['worldEvent']>;
 
@@ -43,17 +45,9 @@ export class GameWorld {
   private phys!: PhysCtx;
   private raycaster = new THREE.Raycaster();
   private groundPlane = new THREE.Plane(new V(0, 1, 0), 0);
-  private clock = { t: 0 };
 
-  private marker = new THREE.Group();
-  private markerTarget: { x: number; z: number } | null = null;
-
-  private sideDoorMesh: THREE.Object3D | null = null;
   private medVanGroup: THREE.Group | null = null;
   private passTagMesh: THREE.Object3D | null = null;
-  private train: THREE.Group | null = null;
-  private smokes: THREE.Mesh[] = [];
-  private walkers: { g: THREE.Object3D; from: number; to: number; speed: number; z: number }[] = [];
   private lampGlow: THREE.Mesh[] = [];
   private lampLights: THREE.PointLight[] = [];
   private npcLao: THREE.Group | null = null;
@@ -69,18 +63,16 @@ export class GameWorld {
   private heldChair: THREE.Object3D | null = null;
   private heldKnife: THREE.Object3D | null = null;
   private foeAnim = 0;
-  private dusts: THREE.Points[] = [];
-  private guide = new THREE.Group();
-  private guideChevs: THREE.Mesh[] = [];
-  private glintPool: THREE.Mesh[] = [];
-  // 镜头、光照与角色已抽离为独立 Rig
+  // 镜头、光照、角色与环境已抽离为独立 Rig
   private _cameraRig!: CameraRig;
   private _lightRig = new LightRig();
   private _actor!: ActorRig;
+  private _guide!: GuideRig;
+  private _ambient = new AmbientRig();
   private lastMove = { x: 0, z: 0 };
   private maxDPR = 1.5;
 
-  // 兼容旧代码：camFocus / camOffset 代理到 CameraRig；角色字段代理到 ActorRig
+  // 兼容旧代码：camFocus / camOffset 代理到 CameraRig；角色字段代理到 ActorRig；环境与引路代理到新 Rig
   private get camFocus() { return this._cameraRig.camFocus; }
   private get camOffset() { return this._cameraRig.camOffset; }
   private get playerGroup() { return this._actor.playerGroup; }
@@ -94,16 +86,24 @@ export class GameWorld {
   private get dogMode() { return this._actor.dogMode; }
   private set dogMode(v: typeof this._actor.dogMode) { this._actor.dogMode = v; }
   private get dogVel() { return this._actor.dogVel; }
+  private get clock() { return this._ambient.clock; }
+  private get train() { return this._ambient.train; }
+  private set train(v: typeof this._ambient.train) { this._ambient.train = v; }
+  private get smokes() { return this._ambient.smokes; }
+  private get walkers() { return this._ambient.walkers; }
+  private get dusts() { return this._ambient.dusts; }
+  private get sideDoorMesh() { return this._ambient.sideDoorMesh; }
+  private set sideDoorMesh(v: typeof this._ambient.sideDoorMesh) { this._ambient.sideDoorMesh = v; }
   onReady?: () => void;
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.initRenderer();
-    // CameraRig 与 ActorRig 需在 initRenderer 之后创建（camera/scene 已就绪）
+    // CameraRig / ActorRig / GuideRig 需在 initRenderer 之后创建（camera/scene 已就绪）
     this._cameraRig = new CameraRig(this.camera);
     this._actor = new ActorRig(this.scene);
+    this._guide = new GuideRig(this.scene);
     this.initLights();
-    this.initMarker();
     // 第三章遭遇战：举在身前的椅子 / 握在手里的刀（平时隐藏，挂在玩家身上）
     const heldChair = this.makeChair();
     heldChair.scale.setScalar(0.85);
@@ -120,50 +120,10 @@ export class GameWorld {
     heldKnife.visible = false;
     this.playerMesh.add(heldKnife);
     this.heldKnife = heldKnife;
-    this.initGuide();
     this.buildSet('park');
     this.resize();
     window.addEventListener('resize', () => this.resize());
     this.onReady?.();
-  }
-
-  private initGuide(): void {
-    // 地面引路箭头（chevron）池
-    const tex = canvasTexture(96, 56, (c) => {
-      c.clearRect(0, 0, 96, 56);
-      c.fillStyle = '#d9a05b';
-      c.beginPath();
-      c.moveTo(30, 8);
-      c.lineTo(72, 28);
-      c.lineTo(30, 48);
-      c.lineTo(42, 28);
-      c.closePath();
-      c.fill();
-    });
-    for (let i = 0; i < 14; i++) {
-      const m = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.0, 0.58),
-        new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.8, depthWrite: false })
-      );
-      // 先绕世界 Y 转向再贴地：Euler 顺序须为 YXZ，否则 rotation.y 会把箭头转出地面
-      m.rotation.order = 'YXZ';
-      m.rotation.x = -Math.PI / 2;
-      m.position.y = 0.045;
-      m.visible = false;
-      this.guide.add(m);
-      this.guideChevs.push(m);
-    }
-    this.scene.add(this.guide);
-    // 互动目标环绕微光池：暖色小八面体，随互动目标缓慢盘旋，视觉上区别于普通场景物件
-    for (let i = 0; i < 12; i++) {
-      const g = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.075),
-        new THREE.MeshBasicMaterial({ color: C.amber, transparent: true, opacity: 0.85 })
-      );
-      g.visible = false;
-      this.scene.add(g);
-      this.glintPool.push(g);
-    }
   }
 
   private initRenderer(): void {
@@ -189,38 +149,6 @@ export class GameWorld {
     this.sun.shadow.bias = -0.0006;
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
-  }
-
-  private initMarker(): void {
-    const ringGeo = new THREE.RingGeometry(0.95, 1.2, 36);
-    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-      color: C.amber, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false
-    }));
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
-    this.marker.add(ring);
-    this.marker.userData.ring = ring;
-
-    const dia = new THREE.Mesh(new THREE.OctahedronGeometry(0.26), mat(C.amber, { emissive: C.amber, emissiveIntensity: 0.45 }));
-    dia.position.y = 1.9;
-    this.marker.add(dia);
-    this.marker.userData.dia = dia;
-
-    const pillar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.34, 7, 10, 1, true),
-      new THREE.MeshBasicMaterial({ color: C.amber, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false })
-    );
-    pillar.position.y = 3.6;
-    this.marker.add(pillar);
-
-    // 互动目标聚光：让当前可交互的人物/道具比周边场景微亮一档，肉眼可辨认但不刺眼
-    const markerLight = new THREE.PointLight(C.amber, 1.7, 6.5, 2);
-    markerLight.position.y = 1.5;
-    this.marker.add(markerLight);
-    this.marker.userData.light = markerLight;
-
-    this.scene.add(this.marker);
-    this.marker.visible = false;
   }
 
   // ------------------------------------------------------------ 物理
@@ -1555,18 +1483,11 @@ export class GameWorld {
   // ------------------------------------------------------------ 输入接口
 
   setMarker(x: number | null, z?: number): void {
-    if (x === null) {
-      this.marker.visible = false;
-      this.markerTarget = null;
-      return;
-    }
-    this.markerTarget = { x, z: z ?? 0 };
-    this.marker.position.set(x, 0, z ?? 0);
-    this.marker.visible = true;
+    this._guide.setMarker(x, z);
   }
 
   getMarker(): { x: number; z: number } | null {
-    return this.markerTarget;
+    return this._guide.getMarker();
   }
 
   playerPos(): { x: number; z: number } {
@@ -1618,8 +1539,8 @@ export class GameWorld {
 
     this._actor.playerGroup.position.set(p.position.x, 0, p.position.z);
     this._actor.tick(dt, len, running, faceTo, { x: p.position.x, z: p.position.z });
-    this.updateAmbient(dt);
-    this.updateGuideTrail();
+    this._ambient.tick(dt);
+    this._guide.tick(dt, { x: p.position.x, z: p.position.z }, this.clock.t);
     this.updateLight(dt);
 
     // 相机：委托给 CameraRig（焦点插值 + 呼吸），太阳跟随仍在此处
@@ -1635,99 +1556,7 @@ export class GameWorld {
     this.renderer.render(this.scene, this.camera);
   }
 
-  // animatePlayer / updateCompanion / updateDog 已抽至 world/actor.ts (ActorRig.tick)
-
-  /** 地面引路箭头：从玩家脚下指向当前目标，每隔一段距离摆一枚，随距离渐隐 */
-  private updateGuideTrail(): void {
-    if (!this.marker.visible || !this.markerTarget) {
-      for (const m of this.guideChevs) m.visible = false;
-      return;
-    }
-    const px = this.playerGroup.position.x;
-    const pz = this.playerGroup.position.z;
-    const dx = this.markerTarget.x - px;
-    const dz = this.markerTarget.z - pz;
-    const dist = Math.hypot(dx, dz);
-    const gap = 1.8;
-    const startGap = 1.1; // 脚下留白，避免箭头压在角色身上
-    const ang = Math.atan2(dx, dz);
-    const count = Math.min(this.guideChevs.length, Math.max(0, Math.floor((dist - startGap) / gap)));
-    for (let i = 0; i < this.guideChevs.length; i++) {
-      const chev = this.guideChevs[i];
-      if (i >= count) { chev.visible = false; continue; }
-      const d = startGap + i * gap;
-      chev.position.set(px + Math.sin(ang) * d, 0.045, pz + Math.cos(ang) * d);
-      chev.rotation.y = ang;
-      chev.visible = true;
-      const fade = 1 - Math.min(1, i / Math.max(1, count));
-      (chev.material as THREE.MeshBasicMaterial).opacity = 0.16 + fade * 0.5;
-    }
-  }
-
-  private updateAmbient(dt: number): void {
-    this.clock.t += dt;
-    // 标记动画
-    if (this.marker.visible) {
-      const dia = this.marker.userData.dia as THREE.Mesh;
-      dia.rotation.y += dt * 2.4;
-      dia.position.y = 1.9 + Math.sin(this.clock.t * 2.6) * 0.14;
-      const ring = this.marker.userData.ring as THREE.Mesh;
-      const s = 1 + Math.sin(this.clock.t * 2.6) * 0.08;
-      ring.scale.set(s, s, s);
-      const light = this.marker.userData.light as THREE.PointLight | undefined;
-      if (light) light.intensity = 1.5 + Math.sin(this.clock.t * 2.6) * 0.35;
-      // 环绕微光：让当前互动目标周身有几点缓慢盘旋的暖光，与普通场景物件区分
-      const mx = this.marker.position.x;
-      const mz = this.marker.position.z;
-      for (let i = 0; i < this.glintPool.length; i++) {
-        const g = this.glintPool[i];
-        if (i >= 5) { g.visible = false; continue; }
-        const a = this.clock.t * 1.1 + (i / 5) * Math.PI * 2;
-        g.position.set(mx + Math.cos(a) * 1.1, 0.7 + Math.sin(this.clock.t * 1.8 + i) * 0.35 + i * 0.25, mz + Math.sin(a) * 1.1);
-        g.visible = true;
-      }
-    } else {
-      for (const g of this.glintPool) g.visible = false;
-    }
-    // 列车
-    if (this.train) {
-      this.train.position.x += dt * 6.5;
-      if (this.train.position.x > 110) this.train.position.x = -130;
-    }
-    // 烟气
-    for (let i = 0; i < this.smokes.length; i++) {
-      const sm = this.smokes[i];
-      sm.position.y += dt * 0.8;
-      sm.position.x += dt * 0.55;
-      sm.scale.multiplyScalar(1 + dt * 0.12);
-      const m = sm.material as THREE.MeshLambertMaterial;
-      m.opacity = 0.32 - (sm.position.y - 14) * 0.028;
-      if (sm.position.y > 23) {
-        sm.position.set(62, 14, -47);
-        sm.scale.setScalar(1.6);
-        m.opacity = 0.3;
-      }
-    }
-    // 背景行人
-    for (const w of this.walkers) {
-      w.g.position.x += w.speed * dt;
-      w.g.rotation.y = w.speed > 0 ? Math.PI / 2 : -Math.PI / 2;
-      if (w.speed > 0 && w.g.position.x > w.to) w.g.position.x = w.from;
-      if (w.speed < 0 && w.g.position.x < w.from) w.g.position.x = w.to;
-    }
-    // 门开动画
-    if (this.sideDoorMesh && this.sideDoorMesh.userData.open) {
-      const targetRy = -1.35;
-      this.sideDoorMesh.rotation.y += (targetRy - this.sideDoorMesh.rotation.y) * Math.min(1, dt * 5);
-      this.sideDoorMesh.position.x += (-13.5 - this.sideDoorMesh.position.x) * Math.min(1, dt * 5);
-    }
-    // 浮尘缓漂（仅所在场景可见时渲染，开销极小）
-    for (const pts of this.dusts) {
-      pts.rotation.y += dt * 0.02;
-      const pm = pts.material as THREE.PointsMaterial;
-      pm.opacity = 0.26 + Math.sin(this.clock.t * 0.5 + pts.id) * 0.06;
-    }
-  }
+  // updateGuideTrail / updateAmbient 已抽至 world/guide.ts 与 world/ambient.ts
 
   private updateLight(dt: number): void {
     this._lightRig.tick(dt);
