@@ -8,7 +8,6 @@
  */
 
 import * as THREE from 'three';
-import { Body, Box, Sphere, Vec3, World as PhysWorld } from 'cannon-es';
 import type { GameState, LightMode, LightPreset, NodeEffects, SceneId } from './story';
 import { KITCHEN_WALLS, PARK_WALLS, SCENE_BOUNDS } from './mapdata';
 import { SCENERY_BLOCKERS, buildScenery } from './scenery';
@@ -19,49 +18,18 @@ import {
   mat, box, cyl, sph, canvasTexture, textBoard, groundTexture, aoPatch,
   mergeColoredBoxes, makePerson, makeTruck, makeVan, makeDog
 } from './buildkit';
+import { LightRig } from './world/light';
+import { CameraRig } from './world/camera';
+import { createPhysics, addWall, removeNamedWall, stepPhysics, type PhysCtx } from './world/physics';
 
 export type WorldEvent = NonNullable<NodeEffects['worldEvent']>;
 
 const V = THREE.Vector3;
 
-// ---------------------------------------------------------------- 光照预设
-
-interface LightDef {
-  hemiSky: number; hemiGround: number; hemiInt: number;
-  sun: number; sunInt: number; sunPos: [number, number, number];
-  bg: number; fogNear: number; fogFar: number; lamps: number;
-}
-
-const LIGHTS: Record<LightPreset, LightDef> = {
-  dawn: {
-    hemiSky: 0xc3d2d8, hemiGround: 0x50493f, hemiInt: 0.85,
-    sun: 0xffd2a0, sunInt: 1.35, sunPos: [26, 15, -8],
-    bg: 0xb6c6c8, fogNear: 80, fogFar: 175, lamps: 0
-  },
-  noon: {
-    hemiSky: 0xdde4e2, hemiGround: 0x5b5b50, hemiInt: 0.95,
-    sun: 0xfff2dc, sunInt: 1.5, sunPos: [14, 40, 10],
-    bg: 0xc7d1cf, fogNear: 95, fogFar: 200, lamps: 0
-  },
-  dusk: {
-    hemiSky: 0x9b8391, hemiGround: 0x403c3a, hemiInt: 0.6,
-    sun: 0xffa866, sunInt: 1.1, sunPos: [-28, 11, 9],
-    bg: 0xc08a5f, fogNear: 70, fogFar: 160, lamps: 1
-  },
-  night: {
-    hemiSky: 0x2f3d52, hemiGround: 0x15181d, hemiInt: 0.45,
-    sun: 0x8fa3c8, sunInt: 0.5, sunPos: [-16, 30, -12],
-    bg: 0x10161f, fogNear: 55, fogFar: 130, lamps: 1
-  }
-};
+// ---------------------------------------------------------------- 光照预设（已抽至 world/light.ts，保留 V 供旧代码兼容）
 
 // ---------------------------------------------------------------- 主类
-
-interface PhysCtx {
-  world: PhysWorld;
-  player: Body;
-  named: Map<string, Body>;
-}
+// PhysCtx 已抽至 world/physics.ts
 
 export class GameWorld {
   private renderer!: THREE.WebGLRenderer;
@@ -116,25 +84,28 @@ export class GameWorld {
   private heldChair: THREE.Object3D | null = null;
   private heldKnife: THREE.Object3D | null = null;
   private foeAnim = 0;
-  private zoomScale = 1;
   private dusts: THREE.Points[] = [];
   private guide = new THREE.Group();
   private guideChevs: THREE.Mesh[] = [];
   private glintPool: THREE.Mesh[] = [];
-  // 镜头位置与 lookAt 共用唯一焦点，避免两套目标互相追赶造成启停抽动。
-  private camFocus = new V(-12, 0, 37);
-  private readonly camOffset = new V(9, 33, 24);
+  // 镜头与光照已抽离为独立 Rig（world/camera.ts、world/light.ts），此处仅保留代理
+  private _cameraRig!: CameraRig;
+  private _lightRig = new LightRig();
   private lastMove = { x: 0, z: 0 };
   private bobT = 0;
   private bobAmt = 0;
   private maxDPR = 1.5;
 
-  private light = { cur: { ...LIGHTS.dawn }, from: { ...LIGHTS.dawn }, to: { ...LIGHTS.dawn }, t: 1, lampsOn: 0 };
+  // 兼容旧代码：camFocus / camOffset 代理到 CameraRig（light 已由 _lightRig 接管）
+  private get camFocus() { return this._cameraRig.camFocus; }
+  private get camOffset() { return this._cameraRig.camOffset; }
   onReady?: () => void;
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.initRenderer();
+    // CameraRig 需在 initRenderer 之后创建（camera 已存在）
+    this._cameraRig = new CameraRig(this.camera);
     this.initLights();
     this.initMarker();
     this.scene.add(this.playerGroup);
@@ -275,33 +246,15 @@ export class GameWorld {
   // ------------------------------------------------------------ 物理
 
   private newPhysics(): PhysCtx {
-    const world = new PhysWorld({ gravity: new Vec3(0, 0, 0) });
-    const player = new Body({
-      mass: 1,
-      shape: new Sphere(PLAYER_R),
-      position: new Vec3(0, PLAYER_R, 0),
-      linearDamping: 0,
-      angularDamping: 1,
-      allowSleep: false
-    });
-    player.fixedRotation = true;
-    player.updateMassProperties();
-    world.addBody(player);
-    return { world, player, named: new Map() };
+    return createPhysics();
   }
 
   private addWall(ctx: PhysCtx, cx: number, cz: number, hx: number, hz: number, h = 3, name?: string): void {
-    const b = new Body({ mass: 0, shape: new Box(new Vec3(hx, h / 2, hz)), position: new Vec3(cx, h / 2, cz) });
-    ctx.world.addBody(b);
-    if (name) ctx.named.set(name, b);
+    addWall(ctx, cx, cz, hx, hz, h, name);
   }
 
   private removeNamedWall(name: string): void {
-    const b = this.phys.named.get(name);
-    if (b) {
-      this.phys.world.removeBody(b);
-      this.phys.named.delete(name);
-    }
+    removeNamedWall(this.phys, name);
   }
 
   // ------------------------------------------------------------ 场景构建
@@ -1419,7 +1372,7 @@ export class GameWorld {
 
   /** 进入/退出遭遇战：镜头收近一档，值班室门打开，冯师傅倒在门边 */
   setEncounter(on: boolean): void {
-    this.zoomScale = on ? 1.32 : 1;
+    this._cameraRig.setEncounter(on);
     this.resize();
     const foe = this.ensureFoe();
     foe.visible = on;
@@ -1631,11 +1584,7 @@ export class GameWorld {
   }
 
   setLightMode(mode: LightMode, autoPreset: LightPreset): void {
-    const target = mode === 'auto' ? autoPreset : mode;
-    const to = LIGHTS[target];
-    this.light.from = { ...this.light.cur };
-    this.light.to = { ...to };
-    this.light.t = 0;
+    this._lightRig.setMode(mode, autoPreset);
   }
 
   // ------------------------------------------------------------ 输入接口
@@ -1665,30 +1614,15 @@ export class GameWorld {
   }
 
   screenToGround(cx: number, cy: number): { x: number; z: number } | null {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const nx = ((cx - rect.left) / rect.width) * 2 - 1;
-    const ny = -(((cy - rect.top) / rect.height) * 2 - 1);
-    this.raycaster.setFromCamera(new THREE.Vector2(nx, ny), this.camera);
-    const out = new V();
-    return this.raycaster.ray.intersectPlane(this.groundPlane, out) ? { x: out.x, z: out.z } : null;
+    return this._cameraRig.screenToGround(cx, cy, this.raycaster, this.groundPlane, this.renderer.domElement);
   }
 
   project(x: number, y: number, z: number): { nx: number; ny: number } {
-    const v = new V(x, y, z).project(this.camera);
-    return { nx: v.x, ny: v.y };
+    return this._cameraRig.project(x, y, z);
   }
 
-  /**
-   * 世界位移 (dx, dz) 在当前固定机位下对应的屏幕方位角（度，0=正上，顺时针）。
-   * 机位朝向恒定（正交相机不随玩家旋转），可直接用相机基向量换算，不受玩家所在位置影响。
-   */
   screenBearing(dx: number, dz: number): number {
-    const right = new V(1, 0, 0).applyQuaternion(this.camera.quaternion);
-    const up = new V(0, 1, 0).applyQuaternion(this.camera.quaternion);
-    const d = new V(dx, 0, dz);
-    const sx = d.dot(right);
-    const sy = d.dot(up);
-    return Math.atan2(sx, sy) * 180 / Math.PI;
+    return this._cameraRig.screenBearing(dx, dz);
   }
 
   // ------------------------------------------------------------ 帧更新
@@ -1713,7 +1647,7 @@ export class GameWorld {
     // 锁定平面
     p.velocity.y = 0;
     p.position.y = PLAYER_R;
-    this.phys.world.step(1 / 60, dt, 3);
+    stepPhysics(this.phys, dt);
     p.position.y = PLAYER_R;
     p.velocity.y = 0;
 
@@ -1731,26 +1665,14 @@ export class GameWorld {
     this.updateGuideTrail();
     this.updateLight(dt);
 
-    // 相机：玩家位置与方向前瞻先合成一个目标，再由唯一焦点做帧率无关阻尼。
-    // 位置和 lookAt 都取同一个 camFocus，消除旧实现中启停时焦点瞬跳、机位滞后的拉扯感。
-    const lead = len > 0.001 ? 1.35 * Math.min(1, len) : 0;
-    const targetX = p.position.x + this.lastMove.x * lead;
-    const targetZ = p.position.z + this.lastMove.z * lead;
-    const camDamping = 1 - Math.exp(-dt * 6);
-    this.camFocus.x += (targetX - this.camFocus.x) * camDamping;
-    this.camFocus.z += (targetZ - this.camFocus.z) * camDamping;
-    const breathe = len < 0.001 ? Math.sin(this.clock.t * 1.7) * 0.09 : 0;
-    this.camera.position.set(
-      this.camFocus.x + this.camOffset.x,
-      this.camOffset.y + breathe,
-      this.camFocus.z + this.camOffset.z
-    );
-    this.camera.lookAt(this.camFocus.x, 1.0 + breathe * 0.5, this.camFocus.z);
+    // 相机：委托给 CameraRig（焦点插值 + 呼吸），太阳跟随仍在此处
+    this._cameraRig.lastMove = this.lastMove;
+    this._cameraRig.tick(dt, { x: p.position.x, z: p.position.z }, len, this.clock.t);
     this.sun.target.position.copy(this.playerGroup.position);
     this.sun.position.set(
-      this.playerGroup.position.x + this.light.cur.sunPos[0],
-      this.light.cur.sunPos[1],
-      this.playerGroup.position.z + this.light.cur.sunPos[2]
+      this.playerGroup.position.x + this._lightRig.cur.sunPos[0],
+      this._lightRig.cur.sunPos[1],
+      this.playerGroup.position.z + this._lightRig.cur.sunPos[2]
     );
 
     this.renderer.render(this.scene, this.camera);
@@ -1933,58 +1855,11 @@ export class GameWorld {
   }
 
   private updateLight(dt: number): void {
-    if (this.light.t < 1) {
-      this.light.t = Math.min(1, this.light.t + dt / 1.4);
-      const t = this.light.t * this.light.t * (3 - 2 * this.light.t);
-      const lerpN = (a: number, b: number) => a + (b - a) * t;
-      const ca = new THREE.Color(), cb = new THREE.Color();
-      const lerpC = (a: number, b: number) => ca.set(a).lerp(cb.set(b), t).getHex();
-      const cur = this.light.cur;
-      const from = this.light.from, to = this.light.to;
-      cur.hemiSky = lerpC(from.hemiSky, to.hemiSky);
-      cur.hemiGround = lerpC(from.hemiGround, to.hemiGround);
-      cur.hemiInt = lerpN(from.hemiInt, to.hemiInt);
-      cur.sun = lerpC(from.sun, to.sun);
-      cur.sunInt = lerpN(from.sunInt, to.sunInt);
-      cur.bg = lerpC(from.bg, to.bg);
-      cur.fogNear = lerpN(from.fogNear, to.fogNear);
-      cur.fogFar = lerpN(from.fogFar, to.fogFar);
-      cur.sunPos = [
-        lerpN(from.sunPos[0], to.sunPos[0]),
-        lerpN(from.sunPos[1], to.sunPos[1]),
-        lerpN(from.sunPos[2], to.sunPos[2])
-      ];
-      cur.lamps = lerpN(from.lamps, to.lamps);
-    }
-    const cur = this.light.cur;
-    this.hemi.color.setHex(cur.hemiSky);
-    this.hemi.groundColor.setHex(cur.hemiGround);
-    this.hemi.intensity = cur.hemiInt;
-    this.sun.color.setHex(cur.sun);
-    this.sun.intensity = cur.sunInt;
-    (this.scene.background as THREE.Color | null) ?? (this.scene.background = new THREE.Color());
-    (this.scene.background as THREE.Color).setHex(cur.bg);
-    (this.scene.fog as THREE.Fog).color.setHex(cur.bg);
-    (this.scene.fog as THREE.Fog).near = cur.fogNear;
-    (this.scene.fog as THREE.Fog).far = cur.fogFar;
-    for (const l of this.lampGlow) {
-      (l.material as THREE.MeshLambertMaterial).emissiveIntensity = cur.lamps * 0.9;
-    }
-    for (const pl of this.lampLights) {
-      pl.intensity = cur.lamps * 14;
-    }
+    this._lightRig.tick(dt);
+    this._lightRig.syncToScene(this.hemi, this.sun, this.scene, this.lampGlow, this.lampLights);
   }
 
   resize(): void {
-    const w = this.container.clientWidth || window.innerWidth;
-    const h = this.container.clientHeight || window.innerHeight;
-    this.renderer.setSize(w, h);
-    const aspect = w / h;
-    const halfH = (aspect >= 1.25 ? 11.5 : 14.5) / this.zoomScale;
-    this.camera.left = -halfH * aspect;
-    this.camera.right = halfH * aspect;
-    this.camera.top = halfH;
-    this.camera.bottom = -halfH;
-    this.camera.updateProjectionMatrix();
+    this._cameraRig.resize(this.container, this.renderer);
   }
 }
